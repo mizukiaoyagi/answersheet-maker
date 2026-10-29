@@ -5,6 +5,20 @@ export function emptyState(): AppState {
   return { meta: { ...DEFAULT_META }, questions: [] };
 }
 
+/** 初めて開いたときの状態: 大問1の小問1〜3が、模範解答は空欄のまま入っている */
+export function initialState(): AppState {
+  const questions = ['1', '2', '3'].map((sub): Question => ({
+    id: newId(),
+    major: '1',
+    sub,
+    type: 'symbol',
+    typeManual: false,
+    answer: '',
+    points: 5,
+  }));
+  return { meta: { ...DEFAULT_META }, questions };
+}
+
 /** 直前の設問の続きとして、新しい設問を作る（大問は同じ、小問番号は数字なら +1） */
 export function nextQuestion(prev?: Question): Question {
   const sub = prev && /^\d+$/.test(prev.sub.trim()) ? String(Number(prev.sub) + 1) : '';

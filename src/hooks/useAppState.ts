@@ -1,15 +1,33 @@
-import { useCallback, useEffect, useState } from 'react';
-import { emptyState, moveQuestion, nextQuestion } from '../lib/questions';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { emptyState, initialState, moveQuestion, nextQuestion } from '../lib/questions';
 import { suggestType } from '../lib/layout';
 import { sampleState, type SampleKind } from '../lib/sample';
 import { clearState, loadState, saveState } from '../lib/storage';
 import type { AppState, Question, TestMeta } from '../lib/types';
 
-/** 入力内容（テスト情報と設問）と、その編集操作。変更のたびに localStorage へ保存する */
-export function useAppState() {
-  const [state, setState] = useState<AppState>(() => loadState() ?? emptyState());
+/** 入力が止まってから保存するまでの時間 */
+const SAVE_DELAY_MS = 300;
 
-  useEffect(() => saveState(state), [state]);
+/** 入力内容（テスト情報と設問）と、その編集操作。変更は localStorage へ自動で保存する */
+export function useAppState() {
+  const [state, setState] = useState<AppState>(() => loadState() ?? initialState());
+
+  // 保存は、入力が止まってから行う（1文字ごとに書き込まない）。ページを閉じるときは、すぐに保存する
+  const latest = useRef(state);
+  latest.current = state;
+  useEffect(() => {
+    const timer = window.setTimeout(() => saveState(state), SAVE_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [state]);
+  useEffect(() => {
+    const flush = () => saveState(latest.current);
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', flush);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', flush);
+    };
+  }, []);
 
   const setMeta = useCallback(
     (patch: Partial<TestMeta>) => setState((s) => ({ ...s, meta: { ...s.meta, ...patch } })),

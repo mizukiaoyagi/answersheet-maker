@@ -1,6 +1,11 @@
-import { Checkbox, Group, NumberInput, SegmentedControl, Text, TextInput } from '@mantine/core';
+import { memo } from 'react';
+import { Checkbox, Group, SegmentedControl, Text, TextInput } from '@mantine/core';
+import { HoldNumberInput } from './HoldNumberInput';
 import type { Orientation, PaperSize, Writing } from '../lib/constants';
 import type { TestMeta } from '../lib/types';
+
+/** チェックボックスは、塗りつぶさず、枠とチェックだけの控えめな見た目にする */
+const CHECK_PROPS = { variant: 'outline', size: 'sm' } as const;
 
 /** 項目名つきの入力部品 */
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -15,30 +20,46 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 /** テスト情報（タイトル、満点、用紙、記入欄）のフォーム */
-export function MetaForm({ meta, onChange }: { meta: TestMeta; onChange: (patch: Partial<TestMeta>) => void }) {
+export const MetaForm = memo(function MetaForm({
+  meta,
+  onChange,
+}: {
+  meta: TestMeta;
+  onChange: (patch: Partial<TestMeta>) => void;
+}) {
   return (
     <div className="panel">
-      <Text fw={700} mb="xs">
-        テスト情報
-      </Text>
       <Group grow align="flex-start" mb="xs">
         <TextInput
           label="タイトル"
-          placeholder="例：理科 小テスト"
+          placeholder="例：物理 中間考査"
           value={meta.title}
           onChange={(e) => onChange({ title: e.currentTarget.value })}
         />
       </Group>
-      <Group grow align="flex-start" mb="xs">
-        <NumberInput
-          label="満点"
-          min={0}
-          allowDecimal={false}
-          value={meta.fullScore}
-          onChange={(v) => onChange({ fullScore: typeof v === 'number' ? v : 0 })}
-        />
+      {/* 満点の横に、記入欄と配点表示のチェックを一列に並べる（下ぞろえ） */}
+      <Group align="flex-end" gap="lg" mb="sm">
+        <HoldNumberInput label="満点" width={120} value={meta.fullScore} onChange={(v) => onChange({ fullScore: v })} />
+        <Field label="記入欄">
+          <Group gap="md" h={36} wrap="nowrap">
+            <Checkbox {...CHECK_PROPS} label="組" checked={meta.hasClass} onChange={(e) => onChange({ hasClass: e.currentTarget.checked })} />
+            <Checkbox {...CHECK_PROPS}
+              label="番号"
+              checked={meta.hasNumber}
+              onChange={(e) => onChange({ hasNumber: e.currentTarget.checked })}
+            />
+            <Checkbox {...CHECK_PROPS} label="氏名" checked={meta.hasName} onChange={(e) => onChange({ hasName: e.currentTarget.checked })} />
+          </Group>
+        </Field>
+        <Group h={36} align="center">
+          <Checkbox {...CHECK_PROPS}
+            label="解答用紙にも配点を表示"
+            checked={meta.showPointsOnSheet}
+            onChange={(e) => onChange({ showPointsOnSheet: e.currentTarget.checked })}
+          />
+        </Group>
       </Group>
-      <Group align="flex-end" gap="lg">
+      <Group align="center" gap="lg">
         <Field label="用紙サイズ">
           <SegmentedControl value={meta.paper} onChange={(v) => onChange({ paper: v as PaperSize })} data={['A4', 'B4']} />
         </Field>
@@ -62,23 +83,7 @@ export function MetaForm({ meta, onChange }: { meta: TestMeta; onChange: (patch:
             ]}
           />
         </Field>
-        <Field label="記入欄">
-          <Group gap="md">
-            <Checkbox label="組" checked={meta.hasClass} onChange={(e) => onChange({ hasClass: e.currentTarget.checked })} />
-            <Checkbox
-              label="番号"
-              checked={meta.hasNumber}
-              onChange={(e) => onChange({ hasNumber: e.currentTarget.checked })}
-            />
-            <Checkbox label="氏名" checked={meta.hasName} onChange={(e) => onChange({ hasName: e.currentTarget.checked })} />
-          </Group>
-        </Field>
-        <Checkbox
-          label="解答用紙にも配点を表示"
-          checked={meta.showPointsOnSheet}
-          onChange={(e) => onChange({ showPointsOnSheet: e.currentTarget.checked })}
-        />
       </Group>
     </div>
   );
-}
+});

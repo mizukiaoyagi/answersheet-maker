@@ -1,6 +1,31 @@
 body {
   margin: 0;
-  background: #f1f3f5;
+  background: var(--c-bg);
+}
+
+:root {
+  /* 配色（主役は深緑。ほかは無彩色に近いグレー） */
+  --c-primary: #1f5f46;
+  --c-primary-soft: #eef5f1;
+  --c-primary-soft-strong: #dbe9e1;
+  --c-bg: #f4f5f5;
+  --c-border: #d9dddb;
+  --c-table-head: #eceeed;
+  --c-table-head-text: #3d4743;
+  --c-muted: #6b7571;
+
+  /* 上部バーの高さ（上下の余白20px × 2 + ボタンの高さ36px + 下の線1px） */
+  --topbar-h: 77px;
+  /* 画面の端から内容までの余白（上部バーの左右の余白40pxにそろえる） */
+  --page-pad-x: 16px;
+  --page-pad-y: 16px;
+  --column-gap: 16px;
+}
+@media (min-width: 900px) {
+  :root {
+    --page-pad-x: 40px;
+    --page-pad-y: 40px;
+  }
 }
 
 .app {
@@ -17,22 +42,28 @@ body {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 16px;
-  padding: 8px 16px;
+  padding: 20px 40px;
   background: #fff;
-  border-bottom: 1px solid #dee2e6;
+  border-bottom: 1px solid var(--c-border);
+  transition: background-color 0.2s;
+}
+/* スクロールしたときは、背景を90%の濃さにして、下の内容がうっすら見えるようにする */
+.topbar.scrolled {
+  background: rgba(255, 255, 255, 0.9);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
 }
 .topbar h1 {
   margin: 0;
   font-size: 18px;
   flex: 1 1 auto;
 }
-
 .main {
   flex: 1;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 16px;
-  padding: 16px;
+  gap: var(--column-gap);
+  padding: var(--page-pad-y) var(--page-pad-x);
 }
 @media (min-width: 1200px) {
   .main {
@@ -41,22 +72,53 @@ body {
   }
   .preview {
     position: sticky;
-    top: 64px;
-    /* 画面の下（余白16px）まで伸ばす */
-    height: calc(100vh - 64px - 16px);
+    top: calc(var(--topbar-h) + var(--page-pad-y));
+    /* 画面の下（余白）まで伸ばす */
+    height: calc(100vh - var(--topbar-h) - var(--page-pad-y) * 2);
     box-sizing: border-box;
-    overflow: auto;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .preview-area {
+    flex: 1;
+    min-height: 0;
   }
 }
 
 .panel {
   background: #fff;
-  border: 1px solid #dee2e6;
+  border: 1px solid var(--c-border);
   border-radius: 8px;
   padding: 12px 16px;
 }
 .editor > .panel + .panel {
-  margin-top: 16px;
+  margin-top: var(--column-gap);
+}
+.hold-spinner {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+}
+.hold-spin {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  line-height: 1;
+  color: #868e96;
+  cursor: pointer;
+  user-select: none;
+  touch-action: none;
+}
+.hold-spin:hover {
+  background: var(--c-primary-soft);
+  color: var(--c-primary);
+}
+.hold-spin:active {
+  background: var(--c-primary-soft-strong);
 }
 .table-scroll {
   overflow-x: auto;
@@ -69,10 +131,27 @@ body {
 .q-table th {
   white-space: nowrap;
   font-size: 12px;
+  background: var(--c-table-head);
+  color: var(--c-table-head-text);
+}
+.q-table th:first-child {
+  border-radius: 6px 0 0 6px;
+}
+.q-table th:last-child {
+  border-radius: 0 6px 6px 0;
 }
 .q-table td {
   vertical-align: top;
   padding: 4px;
+}
+/* 見出しの帯と、最初の行の間をあける */
+.q-table tbody tr:first-child td {
+  padding-top: 14px;
+}
+/* 「削除」の見出しと削除ボタンは、列の真ん中にそろえる */
+.q-table th:last-child,
+.q-table td:last-child {
+  text-align: center;
 }
 
 .drag-handle {
@@ -86,8 +165,8 @@ body {
   color: #868e96;
 }
 .drag-handle:hover {
-  background: #e7f5ff;
-  color: #228be6;
+  background: var(--c-primary-soft);
+  color: var(--c-primary);
 }
 .drag-handle:active {
   cursor: grabbing;
@@ -96,18 +175,35 @@ body {
   opacity: 0.4;
 }
 .q-row.drop-before td {
-  box-shadow: inset 0 3px 0 #228be6;
+  box-shadow: inset 0 3px 0 var(--c-primary);
 }
 .q-row.drop-after td {
-  box-shadow: inset 0 -3px 0 #228be6;
+  box-shadow: inset 0 -3px 0 var(--c-primary);
 }
 
+/* タブの切り替えと拡大縮小ボタンは、白い帯の上に置く */
+.preview-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 16px 0 12px;
+  background: #fff;
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+}
+.preview-head .mantine-Tabs-list::before {
+  display: none;
+}
+.zoom-controls {
+  padding-bottom: 0;
+  margin-right: 8px;
+}
 .preview-area {
-  margin-top: 12px;
-  padding: 12px;
-  background: #dee2e6;
-  border-radius: 6px;
-  overflow: hidden;
+  /* カードにせず、用紙を背景の上に直接置く */
+  margin-top: 8px;
+  padding: 4px 4px 16px;
+  overflow: auto;
+  scrollbar-gutter: stable;
 }
 .scale-wrap {
   margin: 0 auto;
@@ -200,4 +296,18 @@ body {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
+}
+
+/* 行の削除ボタンは普段は目立たないグレー。マウスを乗せたときだけ赤くする */
+.row-delete {
+  color: #868e96;
+}
+.row-delete:hover {
+  background: #ffe3e3;
+  color: #e03131;
+}
+
+/* 入力欄のうっすらした文字（例・なし）も、読める濃さにする */
+.mantine-Input-input::placeholder {
+  color: #868e96;
 }

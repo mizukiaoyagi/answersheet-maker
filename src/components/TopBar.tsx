@@ -1,11 +1,19 @@
 import { Button, Group } from '@mantine/core';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { downloadXlsx } from '../lib/excel';
 import type { Question, TestMeta } from '../lib/types';
 
 /** 上部バー: ツール名、Excel 保存、印刷 */
 export function TopBar({ meta, questions }: { meta: TestMeta; questions: Question[] }) {
   const [exporting, setExporting] = useState(false);
+  // ページをスクロールしたら、背景を少し透かす
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 0);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   const saveExcel = async () => {
     setExporting(true);
@@ -19,13 +27,13 @@ export function TopBar({ meta, questions }: { meta: TestMeta; questions: Questio
   };
 
   return (
-    <header className="topbar no-print">
+    <header className={`topbar no-print${scrolled ? ' scrolled' : ''}`}>
       <h1>解答用紙メーカー</h1>
       <Group gap="xs">
         <Button onClick={saveExcel} loading={exporting}>
           Excelで保存
         </Button>
-        <Button variant="light" onClick={() => window.print()}>
+        <Button variant="outline" onClick={() => window.print()}>
           印刷・PDF
         </Button>
       </Group>

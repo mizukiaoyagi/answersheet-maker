@@ -1,5 +1,5 @@
 import { Alert, Button, Group, Menu, Text } from '@mantine/core';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { totalPoints } from '../lib/layout';
 import type { SampleKind } from '../lib/sample';
 import type { Question } from '../lib/types';
@@ -33,10 +33,41 @@ export function QuestionTable({
   const [dragId, setDragId] = useState<string | null>(null);
   /** ドロップ先の行と、その行の上側/下側のどちらに入れるか */
   const [drop, setDrop] = useState<{ id: string; after: boolean } | null>(null);
-  const endDrag = () => {
+
+  // 行に渡すハンドラは、毎回作り直さない（行を memo 化して、入力した行だけ描き直すため）。
+  // 最新の並べ替えの状態は ref から読む。
+  const dragRef = useRef<{ dragId: string | null; drop: { id: string; after: boolean } | null }>({
+    dragId: null,
+    drop: null,
+  });
+  dragRef.current = { dragId, drop };
+  const onMoveRef = useRef(onMove);
+  onMoveRef.current = onMove;
+  const onRemoveRef = useRef(onRemove);
+  onRemoveRef.current = onRemove;
+
+  const endDrag = useCallback(() => {
     setDragId(null);
     setDrop(null);
-  };
+  }, []);
+  const startDrag = useCallback((id: string) => setDragId(id), []);
+  const dragOver = useCallback((e: React.DragEvent<HTMLTableRowElement>, id: string) => {
+    const cur = dragRef.current;
+    if (!cur.dragId) return;
+    e.preventDefault();
+    const r = e.currentTarget.getBoundingClientRect();
+    const after = e.clientY > r.top + r.height / 2;
+    if (cur.drop?.id !== id || cur.drop.after !== after) setDrop({ id, after });
+  }, []);
+  const dropRow = useCallback(
+    (e: React.DragEvent<HTMLTableRowElement>) => {
+      e.preventDefault();
+      const { dragId: from, drop: to } = dragRef.current;
+      if (from && to) onMoveRef.current(from, to.id, to.after);
+      endDrag();
+    },
+    [endDrag],
+  );
 
   // 追加した行が見える位置までスクロールして、模範解答の欄にカーソルを置く
   const addedId = useRef<string | null>(null);
@@ -52,7 +83,7 @@ export function QuestionTable({
 
   // 行を消してページが短くなると、ページの下端にいるときスクロール位置がずれる。
   // 消した直後は入力欄の高さを保ち、次にスクロール操作をするまで位置が動かないようにする
-  const remove = (id: string, button: HTMLElement) => {
+  const remove = useCallback((id: string, button: HTMLElement) => {
     const editor = button.closest<HTMLElement>('.editor');
     if (editor) {
       editor.style.minHeight = `${editor.offsetHeight}px`;
@@ -62,15 +93,15 @@ export function QuestionTable({
       for (const type of ['wheel', 'touchmove', 'keydown'] as const)
         window.addEventListener(type, release, { once: true, passive: true });
     }
-    onRemove(id);
-  };
+    onRemoveRef.current(id);
+  }, []);
 
   const loadSample = (kind: SampleKind) => {
     if (questions.length && !window.confirm('現在の入力内容をサンプルで置き換えます。よろしいですか？')) return;
     onLoadSample(kind);
   };
   const clear = () => {
-    if (!window.confirm('入力内容をすべて消します。よろしいですか？')) return;
+    if (!window.confirm('入力内容をすべて削除します。よろしいですか？')) return;
     onClear();
   };
 
@@ -95,7 +126,7 @@ export function QuestionTable({
             </Menu.Dropdown>
           </Menu>
           <Button size="xs" variant="outline" color="red" onClick={clear}>
-            入力内容を消す
+            すべて削除
           </Button>
         </Group>
       </Group>
@@ -128,8 +159,8 @@ export function QuestionTable({
             {questions.length === 0 && (
               <tr>
                 <td colSpan={8}>
-                  <Text c="dimmed" size="sm" py="md" ta="center">
-                    設問がありません。下の「設問を追加」か「サンプルを読み込む」を押してください。
+                  <Text c="gray.7" size="sm" py="md" ta="center">
+                    設問を追加してください。
                   </Text>
                 </td>
               </tr>
@@ -139,26 +170,15 @@ export function QuestionTable({
                 key={q.id}
                 q={q}
                 index={i}
-                className={`q-row${dragId === q.id ? ' dragging' : ''}${
-                  drop?.id === q.id && dragId !== q.id ? (drop.after ? ' drop-after' : ' drop-before') : ''
-                }`}
-                onUpdate={(patch) => onUpdate(q.id, patch)}
-                onAnswer={(answer) => onAnswer(q.id, answer)}
-                onRemove={(button) => remove(q.id, button)}
-                onDragStart={() => setDragId(q.id)}
+                dragging={dragId === q.id}
+                dropPosition={drop?.id === q.id && dragId !== q.id ? (drop.after ? 'after' : 'before') : undefined}
+                onUpdate={onUpdate}
+                onAnswer={onAnswer}
+                onRemove={remove}
+                onDragStart={startDrag}
                 onDragEnd={endDrag}
-                onDragOver={(e) => {
-                  if (!dragId) return;
-                  e.preventDefault();
-                  const r = e.currentTarget.getBoundingClientRect();
-                  const after = e.clientY > r.top + r.height / 2;
-                  if (drop?.id !== q.id || drop.after !== after) setDrop({ id: q.id, after });
-                }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  if (dragId && drop) onMove(dragId, drop.id, drop.after);
-                  endDrag();
-                }}
+                onDragOver={dragOver}
+                onDrop={dropRow}
               />
             ))}
           </tbody>
@@ -170,13 +190,14 @@ export function QuestionTable({
         fullWidth
         size="md"
         variant="light"
+        radius={40}
         onClick={() => {
           addedId.current = onAdd();
         }}
       >
         ＋ 設問を追加
       </Button>
-      <Text mt="sm" ta="right" fw={700} c={scoreOk ? undefined : 'red'}>
+      <Text mt="sm" ta="right" fw={700} c={scoreOk ? undefined : 'orange.9'}>
         配点合計：{total}点 ／ 満点 {fullScore}点
       </Text>
       {!scoreOk && (
