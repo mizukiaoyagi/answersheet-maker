@@ -1,6 +1,6 @@
 import { DEFAULT_META, type AppState } from './types';
 
-const KEY = 'answer-sheet-maker:v1';
+const KEY = 'answersheet-maker:v1';
 
 export function loadState(): AppState | null {
   try {
