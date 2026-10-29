@@ -156,17 +156,40 @@ export function gridCells(n: number, rows: number, mainW: number): { perRow: num
   return { perRow, widths };
 }
 
-export function boxLabel(q: Pick<Question, 'major' | 'sub'>): string {
+const KANJI_DIGITS = ['〇', '一', '二', '三', '四', '五', '六', '七', '八', '九'];
+
+/** 0〜99 を漢数字にする（10→十、21→二十一）。範囲外は数字のまま */
+export function toKanjiNumber(n: number): string {
+  if (!Number.isInteger(n) || n < 0 || n > 99) return String(n);
+  if (n < 10) return KANJI_DIGITS[n];
+  const tens = Math.floor(n / 10);
+  const ones = n % 10;
+  return (tens === 1 ? '' : KANJI_DIGITS[tens]) + '十' + (ones ? KANJI_DIGITS[ones] : '');
+}
+
+/** 数字だけの文字列（全角も可）なら、その数を返す。そうでなければ null */
+function asNumber(text: string): number | null {
+  const t = text.trim().replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0));
+  return /^\d+$/.test(t) ? Number(t) : null;
+}
+
+/** 小問番号のセルに出す文字。小問が空なら大問番号を出す。kanji=true（国語の縦書き）では大問番号を漢数字にする */
+export function boxLabel(q: Pick<Question, 'major' | 'sub'>, kanji = false): string {
   const sub = q.sub.trim();
-  if (!sub) return q.major.trim();
+  if (!sub) {
+    const n = asNumber(q.major);
+    return kanji && n !== null ? toKanjiNumber(n) : q.major.trim();
+  }
   if (/^[(（]/.test(sub)) return sub;
   return /^\d+$/.test(sub) ? `(${sub})` : sub;
 }
 
-export function groupLabel(major: string): string {
+/** 大問の見出し。kanji=true（国語の縦書き）では「大問一」のように漢数字にする */
+export function groupLabel(major: string, kanji = false): string {
   const m = major.trim();
-  if (/^\d+$/.test(m)) return `大問${m}`;
-  return m;
+  const n = asNumber(m);
+  if (n === null) return m;
+  return `大問${kanji ? toKanjiNumber(n) : m}`;
 }
 
 // ---------- レイアウト生成 ----------
@@ -364,7 +387,7 @@ function addLine(pb: PageBuilder, line: Line, prevEnd: number | null, vertical: 
         rs,
         cs: it.lead,
         kind: 'label',
-        label: boxLabel(it.q),
+        label: boxLabel(it.q, vertical),
         align: 'center',
         valign: 'middle',
         hText: true,
@@ -534,7 +557,7 @@ export function buildLayout(meta: TestMeta, questions: Question[]): Layout {
   }
 
   for (const g of groups) {
-    const label = groupLabel(g[0].major);
+    const label = groupLabel(g[0].major, vertical);
     const lines = packGroup(g, cols, COEF.LABEL_COLS, physCols - cols);
     // 大問の見出しだけが前のページに取り残されないよう、見出し＋最初の行が入るか確認する
     if (cur.bodyUnits > 0 && cur.units + COEF.GROUP_ROWS + lines[0].h > usableUnits) cur = newPage();
@@ -568,9 +591,7 @@ export function cellRuns(c: LCell, mode: Mode, showPointsOnSheet = true): Run[] 
   const text = c.vertical ? c.text.replace(/ /g, '') : c.text;
   switch (c.kind) {
     case 'title': {
-      const runs: Run[] = [{ text, pt: FONT.TITLE_PT, color: black, bold: true }];
-      if (mode === 'model') runs.push({ text: '　【模範解答】', pt: FONT.TEXT_PT, color: COLOR.RED, bold: true });
-      return runs.filter((r) => r.text);
+      return text ? [{ text, pt: FONT.TITLE_PT, color: black, bold: true }] : [];
     }
     case 'text':
     case 'frame': {

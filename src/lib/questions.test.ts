@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { emptyState, moveQuestion, nextQuestion } from './questions';
+import { emptyState, initialState, moveQuestion, nextQuestion } from './questions';
 import type { Question } from './types';
 
 const q = (id: string, sub = ''): Question => ({
@@ -51,5 +51,21 @@ describe('emptyState', () => {
   it('毎回新しいオブジェクト', () => {
     expect(emptyState().questions).toEqual([]);
     expect(emptyState().meta).not.toBe(emptyState().meta);
+  });
+});
+
+describe('initialState', () => {
+  it('大問1の小問1〜3が入っていて、模範解答とマス目は空欄', () => {
+    const { questions } = initialState();
+    expect(questions.map((q) => [q.major, q.sub])).toEqual([
+      ['1', '1'],
+      ['1', '2'],
+      ['1', '3'],
+    ]);
+    expect(questions.every((q) => q.answer === '' && q.grid === undefined)).toBe(true);
+    expect(new Set(questions.map((q) => q.id)).size).toBe(3);
+  });
+  it('毎回新しい ID', () => {
+    expect(initialState().questions[0].id).not.toBe(initialState().questions[0].id);
   });
 });

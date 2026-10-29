@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildLayout, paperCols, totalPoints } from './layout';
+import { boxLabel, buildLayout, groupLabel, paperCols, toKanjiNumber, totalPoints } from './layout';
 import { sampleState } from './sample';
 import { buildWorkbook } from './excel';
 
@@ -106,5 +106,32 @@ describe('縦書きレイアウト', () => {
     const wb = buildWorkbook(s.meta, many);
     const ws = wb.getWorksheet('解答用紙')!;
     expect(ws.rowCount).toBe(l2.cols * l2.pages.length);
+  });
+});
+
+describe('国語（縦書き）の大問番号は漢数字', () => {
+  it('漢数字に直す（0〜99）', () => {
+    expect([1, 2, 9, 10, 11, 20, 21, 99].map(toKanjiNumber)).toEqual(['一', '二', '九', '十', '十一', '二十', '二十一', '九十九']);
+    expect(toKanjiNumber(100)).toBe('100');
+    expect(toKanjiNumber(-1)).toBe('-1');
+  });
+
+  it('見出しとラベル: 縦書きは漢数字、横書きは数字のまま', () => {
+    expect(groupLabel('1', true)).toBe('大問一');
+    expect(groupLabel('１２', true)).toBe('大問十二');
+    expect(groupLabel('1')).toBe('大問1');
+    expect(groupLabel('ア', true)).toBe('ア');
+    expect(boxLabel({ major: '3', sub: '' }, true)).toBe('三');
+    expect(boxLabel({ major: '3', sub: '' })).toBe('3');
+    expect(boxLabel({ major: '3', sub: '2' }, true)).toBe('(2)'); // 小問は数字のまま
+  });
+
+  it('国語サンプルの見出しは「大問一」〜、横書きサンプルは「大問1」〜', () => {
+    const v = sampleState('vertical');
+    const vt = buildLayout(v.meta, v.questions).pages[0].cells.filter((c) => c.kind === 'group').map((c) => c.text);
+    expect(vt).toEqual(['大問一', '大問二', '大問三', '大問四']);
+    const h = sampleState('one');
+    const ht = buildLayout(h.meta, h.questions).pages[0].cells.filter((c) => c.kind === 'group').map((c) => c.text);
+    expect(ht).toEqual(['大問1', '大問2', '大問3', '大問4']);
   });
 });
