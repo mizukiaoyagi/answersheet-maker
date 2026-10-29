@@ -1,0 +1,203 @@
+body {
+  margin: 0;
+  background: #f1f3f5;
+}
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 8px 16px;
+  background: #fff;
+  border-bottom: 1px solid #dee2e6;
+}
+.topbar h1 {
+  margin: 0;
+  font-size: 18px;
+  flex: 1 1 auto;
+}
+
+.main {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  padding: 16px;
+}
+@media (min-width: 1200px) {
+  .main {
+    grid-template-columns: minmax(520px, 1fr) minmax(0, 1fr);
+    align-items: start;
+  }
+  .preview {
+    position: sticky;
+    top: 64px;
+    /* 画面の下（余白16px）まで伸ばす */
+    height: calc(100vh - 64px - 16px);
+    box-sizing: border-box;
+    overflow: auto;
+  }
+}
+
+.panel {
+  background: #fff;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 12px 16px;
+}
+.editor > .panel + .panel {
+  margin-top: 16px;
+}
+.table-scroll {
+  overflow-x: auto;
+}
+.q-table {
+  table-layout: fixed;
+  width: 100%;
+  min-width: 620px;
+}
+.q-table th {
+  white-space: nowrap;
+  font-size: 12px;
+}
+.q-table td {
+  vertical-align: top;
+  padding: 4px;
+}
+
+.drag-handle {
+  cursor: grab;
+  user-select: none;
+  text-align: center;
+  font-size: 22px;
+  line-height: 34px;
+  height: 34px;
+  border-radius: 6px;
+  color: #868e96;
+}
+.drag-handle:hover {
+  background: #e7f5ff;
+  color: #228be6;
+}
+.drag-handle:active {
+  cursor: grabbing;
+}
+.q-row.dragging {
+  opacity: 0.4;
+}
+.q-row.drop-before td {
+  box-shadow: inset 0 3px 0 #228be6;
+}
+.q-row.drop-after td {
+  box-shadow: inset 0 -3px 0 #228be6;
+}
+
+.preview-area {
+  margin-top: 12px;
+  padding: 12px;
+  background: #dee2e6;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.scale-wrap {
+  margin: 0 auto;
+}
+.sheet-scale {
+  transform-origin: top left;
+  display: flex;
+  flex-direction: column;
+  width: max-content;
+}
+.sheet {
+  box-sizing: border-box;
+  background: #fff;
+  color: #000;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+}
+.sheet-grid {
+  display: grid;
+  position: relative;
+}
+.sheet-line {
+  position: absolute;
+  background: #000;
+  pointer-events: none;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.sheet-cell.hcell {
+  padding: 0.3mm;
+}
+.sheet-cell.vcell {
+  padding: 0.8mm 0.3mm;
+}
+.v-text {
+  writing-mode: vertical-rl;
+  /* 数字・英字も1文字ずつ正立（縦向き）にする */
+  text-orientation: upright;
+  max-height: 100%;
+}
+.sheet-cell {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0.3mm 0.8mm;
+  line-height: 1.25;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media print {
+  html,
+  body {
+    background: #fff !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .app,
+  .main,
+  .preview,
+  .preview-area,
+  .scale-wrap,
+  .sheet-scale {
+    display: block !important;
+    position: static !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    width: auto !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    transform: none !important;
+    background: #fff !important;
+  }
+  .sheet {
+    break-after: page;
+    page-break-after: always;
+  }
+  .sheet:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+  .sheet {
+    box-shadow: none !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
