@@ -1,12 +1,9 @@
-import { ActionIcon, Button, NumberInput, Select, Text, Textarea, TextInput } from '@mantine/core';
+import { ActionIcon, Button, Checkbox, Group, NumberInput, Select, Text, Textarea, TextInput } from '@mantine/core';
 import { memo } from 'react';
-import { countChars, gridCount, suggestType } from '../lib/layout';
-import { TYPE_LABEL, type AnswerType, type Question } from '../lib/types';
+import { countChars, plainLength, suggestType } from '../lib/layout';
+import { TYPE_LABEL, type AnswerType, type BoxSize, type Question } from '../lib/types';
 
 const TYPE_OPTIONS = (Object.keys(TYPE_LABEL) as AnswerType[]).map((t) => ({ value: t, label: TYPE_LABEL[t] }));
-
-/** 改行を除いた文字数（マス目に入れる文字数） */
-const plainLength = (s: string) => [...s.replace(/[\r\n]/g, '')].length;
 
 export type DropPosition = 'before' | 'after';
 
@@ -43,7 +40,9 @@ export const QuestionRow = memo(function QuestionRow({
   onDrop,
 }: Props) {
   const no = `${index + 1}行目`;
-  const overflow = gridCount(q) > 0 && plainLength(q.answer) > gridCount(q);
+  const setSize = (size: BoxSize | undefined) => onUpdate(q.id, { size });
+  // 大きさを指定したマス目は、模範解答が入りきらないことがある（指定しないときは、答えの字数ぶん作る）
+  const overflow = !!q.grid && !!q.size && plainLength(q.answer) > q.size.w * q.size.rows;
   const className = `q-row${dragging ? ' dragging' : ''}${dropPosition ? ` drop-${dropPosition}` : ''}`;
 
   return (
@@ -105,7 +104,6 @@ export const QuestionRow = memo(function QuestionRow({
           aria-label={`${no} 模範解答`}
           autosize
           minRows={1}
-          maxRows={6}
           value={q.answer}
           onChange={(e) => onAnswer(q.id, e.currentTarget.value)}
         />
@@ -114,16 +112,40 @@ export const QuestionRow = memo(function QuestionRow({
         </Text>
       </td>
       <td>
-        <NumberInput
-          aria-label={`${no} マス目の字数`}
-          placeholder="なし"
-          min={0}
-          max={200}
-          allowDecimal={false}
-          hideControls
-          suffix="字"
-          value={q.grid ?? ''}
-          onChange={(v) => onUpdate(q.id, { grid: typeof v === 'number' && v > 0 ? v : undefined })}
+        {/* 大きさ（字数×行数。空なら模範解答の長さに合わせる）と、マス目にするか */}
+        <Group gap={4} wrap="nowrap">
+          <NumberInput
+            aria-label={`${no} 欄の1行の字数`}
+            placeholder="自動"
+            min={1}
+            max={100}
+            allowDecimal={false}
+            hideControls
+            suffix="字"
+            value={q.size?.w ?? ''}
+            onChange={(v) => setSize(typeof v === 'number' && v > 0 ? { w: v, rows: q.size?.rows ?? 1 } : undefined)}
+          />
+          <NumberInput
+            aria-label={`${no} 欄の行数`}
+            placeholder="行"
+            disabled={!q.size}
+            min={1}
+            max={20}
+            allowDecimal={false}
+            hideControls
+            suffix="行"
+            value={q.size?.rows ?? ''}
+            onChange={(v) => q.size && setSize({ w: q.size.w, rows: typeof v === 'number' && v > 0 ? v : 1 })}
+          />
+        </Group>
+        <Checkbox
+          mt={4}
+          variant="outline"
+          size="xs"
+          label="マス目"
+          aria-label={`${no} マス目`}
+          checked={!!q.grid}
+          onChange={(e) => onUpdate(q.id, { grid: e.currentTarget.checked || undefined })}
         />
       </td>
       <td>

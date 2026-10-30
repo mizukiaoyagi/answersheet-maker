@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { COEF } from './constants';
-import { buildLayout, gridCells, gridCount, maxCellsPerRow, type LCell } from './layout';
+import { buildLayout, gridCells, maxCellsPerRow, plainLength, sizedBox, type LCell } from './layout';
 import { sampleState } from './sample';
 import { DEFAULT_META, type AnswerType, type Question } from './types';
 
@@ -12,7 +12,8 @@ const q = (answer: string, grid?: number, type: AnswerType = 'word', sub = '1'):
   points: 5,
   type,
   typeManual: false,
-  grid,
+  // マス目にするか（数は、模範解答の字数と同じ）
+  grid: grid ? true : undefined,
 });
 
 const overlaps = (a: { r: number; c: number; rs: number; cs: number }, b: typeof a) =>
@@ -32,11 +33,9 @@ function answerRect(cells: LCell[]) {
 }
 
 describe('マス目', () => {
-  it('字数の指定（不正は無効）', () => {
-    expect(gridCount({ grid: 10 })).toBe(10);
-    expect(gridCount({})).toBe(0);
-    expect(gridCount({ grid: -3 })).toBe(0);
-    expect(gridCount({ grid: 2.7 })).toBe(2);
+  it('マス目に入る文字数は、改行を除いた字数', () => {
+    expect(plainLength('あい\nう')).toBe(3);
+    expect(plainLength('')).toBe(0);
   });
 
   it('マスの割り付け。割り切れない分は行の最後のマスを広げる', () => {
@@ -57,10 +56,9 @@ describe('マス目', () => {
       const without = buildLayout(DEFAULT_META, [q(answer, undefined, type)]).pages[0].cells;
       const withGrid = buildLayout(DEFAULT_META, [q(answer, n, type)]).pages[0].cells;
       expect(answerRect(withGrid)).toEqual(answerRect(without));
-      // 小問番号・配点のセルも同じ位置
+      // 小問番号のセルも同じ位置
       const pick = (cells: LCell[], k: string) => cells.filter((c) => c.kind === k).map((c) => [c.r, c.c, c.rs, c.cs]);
       expect(pick(withGrid, 'label')).toEqual(pick(without, 'label'));
-      expect(pick(withGrid, 'pts')).toEqual(pick(without, 'pts'));
     });
   }
 
@@ -84,7 +82,7 @@ describe('マス目', () => {
   });
 
   it('模範解答は1文字ずつ左上から順にマスに入り、余りは空のマス', () => {
-    const cells = buildLayout(DEFAULT_META, [q('ニュートン', 8, 'word')]).pages[0].cells;
+    const cells = buildLayout(DEFAULT_META, [{ ...q('ニュートン', 1, 'word'), size: { w: 4, rows: 2 } }]).pages[0].cells;
     const grid = cells.filter((c) => c.kind === 'grid').sort((a, b) => a.r - b.r || a.c - b.c);
     expect(grid.map((c) => c.answer).join('')).toBe('ニュートン');
     expect(grid).toHaveLength(8);
@@ -117,14 +115,75 @@ describe('マス目', () => {
     expect(withGrid.find((c) => c.kind === 'label')!.vertical).toBe(false);
   });
 
-  it('サンプルのマス目は模範解答が収まる', () => {
+  it('サンプルのマス目は、模範解答の字数ちょうどのマスになる', () => {
     for (const kind of ['one', 'vertical'] as const) {
       const s = sampleState(kind);
-      for (const x of s.questions.filter((y) => gridCount(y) > 0)) {
-        expect([...x.answer].length).toBeLessThanOrEqual(gridCount(x));
-      }
+      const l = buildLayout(s.meta, s.questions);
+      const want = s.questions.filter((y) => y.grid && !y.size).reduce((n, y) => n + plainLength(y.answer), 0);
+      expect(l.pages.reduce((n, p) => n + p.cells.filter((c) => c.kind === 'grid').length, 0), kind).toBe(want);
     }
     expect(COEF.GRID_CELL_COLS * COEF.COL_MM).toBe(COEF.ROW_MM); // 1文字ぶん = 正方形
+  });
+});
+
+describe('大きさの指定', () => {
+  const sized = (answer: string, w: number, rows: number, grid = false, sub = '1'): Question => ({
+    ...q(answer, grid ? 1 : undefined, 'word', sub),
+    size: { w, rows },
+  });
+  const rectOf = (cells: LCell[]) => {
+    const r = answerRect(cells);
+    return [r.rs, r.cs];
+  };
+
+  it('sizedBox: 字数×行数。幅は欄に入る分まで', () => {
+    expect(sizedBox({ w: 5, rows: 1 }, 38, 1)).toEqual({ mainW: 10, rows: 1, perRow: 5 });
+    expect(sizedBox({ w: 5, rows: 3 }, 38, 1)).toEqual({ mainW: 10, rows: 3, perRow: 5 });
+    expect(sizedBox({ w: 100, rows: 2 }, 31, 1)).toEqual({ mainW: 30, rows: 2, perRow: 15 });
+    // 未指定・不正は 5字×1行
+    expect(sizedBox(undefined, 38, 1)).toEqual({ mainW: 10, rows: 1, perRow: 5 });
+    expect(sizedBox({ w: 0, rows: -2 }, 38, 1)).toEqual({ mainW: 10, rows: 1, perRow: 5 });
+  });
+
+  it('答えの長さが違っても、同じ指定なら同じ大きさ（種類も関係しない）', () => {
+    const sizes = ['ア', '漢字', 'あいうえお', 'あ'.repeat(30)].map((a) =>
+      rectOf(buildLayout(DEFAULT_META, [sized(a, 5, 1)]).pages[0].cells),
+    );
+    expect(new Set(sizes.map((s) => s.join())).size).toBe(1);
+    expect(sizes[0]).toEqual([1, 10]);
+  });
+
+  it('マス目にすると、指定した大きさの欄をマスで埋める。大きさは変わらない', () => {
+    const none = buildLayout(DEFAULT_META, [sized('漢字', 5, 2)]).pages[0].cells;
+    const grid = buildLayout(DEFAULT_META, [sized('漢字', 5, 2, true)]).pages[0].cells;
+    expect(none.filter((c) => c.kind === 'grid')).toHaveLength(0);
+    expect(grid.filter((c) => c.kind === 'grid')).toHaveLength(10);
+    expect(rectOf(grid)).toEqual(rectOf(none));
+    // 答えより多いマスは空のマス
+    expect(grid.filter((c) => c.kind === 'grid' && c.answer).map((c) => c.answer).join('')).toBe('漢字');
+  });
+
+  it('1行でも、マスは1文字ぶんの幅で並ぶ', () => {
+    const cells = buildLayout(DEFAULT_META, [sized('あい', 5, 1, true)]).pages[0].cells;
+    const grid = cells.filter((c) => c.kind === 'grid');
+    expect(grid.map((c) => c.cs)).toEqual([2, 2, 2, 2, 2]);
+    expect(rectOf(cells)).toEqual([1, 10]);
+  });
+
+  it('大きさを指定せずにマス目だけにすると、模範解答の字数ちょうど。答えが空なら、その種類の大きさを埋める', () => {
+    const grids = (a: string) =>
+      buildLayout(DEFAULT_META, [q(a, 1, 'word')]).pages[0].cells.filter((c) => c.kind === 'grid').length;
+    expect(grids('ニュートン')).toBe(5);
+    expect(grids('')).toBe(3); // 語句の最小幅（6列）= 3マス
+  });
+
+  it('大きさの違う欄を同じ大問に混ぜられる。大きさ未指定は、答えの長さに合わせる', () => {
+    const auto = { ...q('ニュートン', undefined, 'word', '4') };
+    const qs = [sized('', 5, 1, true, '1'), sized('', 2, 1, true, '2'), sized('', 10, 2, false, '3'), auto];
+    const l = buildLayout(DEFAULT_META, qs);
+    expect(l.fits).toBe(true);
+    expect(l.pages[0].cells.filter((c) => c.kind === 'label')).toHaveLength(4);
+    expect(l.pages[0].cells.filter((c) => c.kind === 'grid')).toHaveLength(7);
   });
 });
 

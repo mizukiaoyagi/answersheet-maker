@@ -20,6 +20,26 @@ describe('nextQuestion', () => {
     expect(n.sub).toBe('4');
     expect(n.id).not.toBe('a');
   });
+  it('種類・マス目・大きさ・配点は引き継ぎ、模範解答は空', () => {
+    const prev: Question = {
+      ...q('a', '1'),
+      type: 'essay',
+      typeManual: true,
+      answer: '漢字',
+      points: 1,
+      grid: true,
+      size: { w: 5, rows: 2 },
+    };
+    const n = nextQuestion(prev);
+    expect([n.type, n.typeManual, n.points, n.grid, n.answer]).toEqual(['essay', true, 1, true, '']);
+    expect(n.size).toEqual(prev.size);
+    // 元の設問と設定を共有しない
+    expect(n.size).not.toBe(prev.size);
+  });
+  it('最初の設問の既定値は記号・5点', () => {
+    const n = nextQuestion();
+    expect([n.type, n.points, n.grid, n.size]).toEqual(['symbol', 5, undefined, undefined]);
+  });
   it('小問が数字でなければ空、最初の設問は大問1', () => {
     expect(nextQuestion(q('a', 'ア')).sub).toBe('');
     expect(nextQuestion().major).toBe('1');

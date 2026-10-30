@@ -1,7 +1,7 @@
 import ExcelJS from 'exceljs';
 import { describe, expect, it } from 'vitest';
 import { buildWorkbook } from './excel';
-import { buildLayout, cellRuns, gridCount, type LCell } from './layout';
+import { buildLayout, cellRuns, type LCell } from './layout';
 import { DEFAULT_META, type AnswerType, type Question, type TestMeta } from './types';
 
 /** 再現できる乱数 */
@@ -28,13 +28,13 @@ function randomCase(seed: number): { meta: TestMeta; questions: Question[] } {
     hasClass: rand() < 0.7,
     hasNumber: rand() < 0.7,
     hasName: rand() < 0.7,
-    showPointsOnSheet: rand() < 0.5,
     fullScore: Math.floor(rand() * 200),
   };
   const n = Math.floor(rand() * 40);
   const questions: Question[] = Array.from({ length: n }, (_, i) => {
     const len = pick([0, 1, 2, 3, 8, 15, 16, 40, 120]);
-    const grid = rand() < 0.3 ? pick([1, 2, 5, 10, 20, 47, 100]) : undefined;
+    const grid = rand() < 0.3 ? true : undefined;
+    const size = rand() < 0.3 ? { w: pick([1, 2, 5, 10, 30, 100]), rows: pick([1, 2, 3, 20]) } : undefined;
     return {
       id: `q${i}`,
       major: pick(['1', '1', '2', '3', '', '大']),
@@ -44,6 +44,7 @@ function randomCase(seed: number): { meta: TestMeta; questions: Question[] } {
       answer: pick(['あ', 'A', '1', 'ｱ']).repeat(len) + (rand() < 0.2 ? '\n改行' : ''),
       points: pick([0, 1, 2.5, 5, 10]),
       grid,
+      size,
     };
   });
   return { meta, questions };
@@ -59,9 +60,9 @@ describe('ランダムな入力でレイアウトが壊れない', () => {
       // 設問がすべてどこかのページに載っている（小問番号のセルの数 = 設問数）
       const labels = l.pages.reduce((n, p) => n + p.cells.filter((c) => c.kind === 'label').length, 0);
       expect(labels).toBe(questions.length);
-      // マス目は指定した字数ちょうど
+      // マス目にしない設問のマスはない
       const grids = l.pages.reduce((n, p) => n + p.cells.filter((c) => c.kind === 'grid').length, 0);
-      expect(grids).toBe(questions.reduce((n, q) => n + gridCount(q), 0));
+      if (!questions.some((q) => q.grid)) expect(grids).toBe(0);
 
       for (const p of l.pages) {
         expect(p.colWidths.every((w) => w > 0)).toBe(true);

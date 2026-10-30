@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildLayout, gridCount, totalPoints } from './layout';
+import { buildLayout, totalPoints } from './layout';
 import { sampleState, type SampleKind } from './sample';
 
 const kinds: SampleKind[] = ['one', 'two', 'vertical'];
@@ -22,11 +22,8 @@ describe('サンプル', () => {
         }
       });
 
-      it('模範解答の入っていない設問はなく、マス目は模範解答が収まる', () => {
-        for (const q of s.questions) {
-          expect(q.answer.length).toBeGreaterThan(0);
-          if (gridCount(q) > 0) expect([...q.answer].length).toBeLessThanOrEqual(gridCount(q));
-        }
+      it('模範解答の入っていない設問はない', () => {
+        for (const q of s.questions) expect(q.answer.length).toBeGreaterThan(0);
       });
 
       it('用紙に収まる', () => {
@@ -49,9 +46,23 @@ describe('サンプル', () => {
     for (const kind of kinds) {
       const s = sampleState(kind);
       const types = new Set(s.questions.map((q) => q.type));
-      expect(types, kind).toEqual(new Set(['symbol', 'word', 'essay']));
-      expect(s.questions.some((q) => gridCount(q) > 0), kind).toBe(true);
+      for (const t of ['symbol', 'word', 'essay'] as const) expect(types.has(t), `${kind} ${t}`).toBe(true);
+      expect(s.questions.some((q) => q.grid), kind).toBe(true);
     }
+  });
+
+  it('国語の大問1は漢字20問で、カスタムの同じ大きさ。答えの長さが違っても欄は同じ', () => {
+    const s = sampleState('vertical');
+    const kanji = s.questions.filter((q) => q.major === '1');
+    expect(kanji).toHaveLength(20);
+    expect(new Set(kanji.map((q) => JSON.stringify(q.size))).size).toBe(1);
+    expect(kanji.every((q) => q.size)).toBe(true);
+    expect(new Set(kanji.map((q) => q.answer.length)).size).toBeGreaterThan(1);
+    // 答えは欄（4字）に収まる
+    expect(kanji.every((q) => q.answer.length <= (q.size?.w ?? 0))).toBe(true);
+    const boxes = buildLayout(s.meta, s.questions).pages[0].cells.filter((c) => c.kind === 'box' && c.answer);
+    const kanjiBoxes = boxes.filter((c) => kanji.some((q) => q.answer === c.answer));
+    expect(new Set(kanjiBoxes.map((c) => `${c.rs}x${c.cs}`)).size).toBe(1);
   });
 
   it('縦書きのサンプルは B4 横', () => {

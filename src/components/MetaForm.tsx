@@ -37,7 +37,7 @@ export const MetaForm = memo(function MetaForm({
           onChange={(e) => onChange({ title: e.currentTarget.value })}
         />
       </Group>
-      {/* 満点の横に、記入欄と配点表示のチェックを一列に並べる（下ぞろえ） */}
+      {/* 満点の横に、記入欄のチェックを一列に並べる（下ぞろえ） */}
       <Group align="flex-end" gap="lg" mb="sm">
         <HoldNumberInput label="満点" width={120} value={meta.fullScore} onChange={(v) => onChange({ fullScore: v })} />
         <Field label="記入欄">
@@ -51,13 +51,6 @@ export const MetaForm = memo(function MetaForm({
             <Checkbox {...CHECK_PROPS} label="氏名" checked={meta.hasName} onChange={(e) => onChange({ hasName: e.currentTarget.checked })} />
           </Group>
         </Field>
-        <Group h={36} align="center">
-          <Checkbox {...CHECK_PROPS}
-            label="解答用紙にも配点を表示"
-            checked={meta.showPointsOnSheet}
-            onChange={(e) => onChange({ showPointsOnSheet: e.currentTarget.checked })}
-          />
-        </Group>
       </Group>
       <Group align="center" gap="lg">
         <Field label="用紙サイズ">

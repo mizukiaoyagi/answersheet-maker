@@ -8,6 +8,14 @@ export const TYPE_LABEL: Record<AnswerType, string> = {
   essay: '記述',
 };
 
+/** 解答欄の大きさ（字数×行数）。指定すると、答えの長さに関係なくこの大きさになる */
+export interface BoxSize {
+  /** 1行の字数 */
+  w: number;
+  /** 行数 */
+  rows: number;
+}
+
 export interface Question {
   id: string;
   major: string;
@@ -17,8 +25,13 @@ export interface Question {
   typeManual: boolean;
   answer: string;
   points: number;
-  /** 指定すると、その字数のマス目の解答欄にする（未指定は自動サイズ） */
-  grid?: number;
+  /**
+   * マス目の解答欄にする。大きさを指定したときは、その欄をマスで埋める。
+   * 指定しないときは、模範解答の字数ちょうどのマスにする（欄の大きさもその字数で決まる）。
+   */
+  grid?: boolean;
+  /** 指定すると、解答欄をこの大きさにする（未指定は、模範解答の長さに合わせた大きさ） */
+  size?: BoxSize;
 }
 
 export interface TestMeta {
@@ -26,8 +39,6 @@ export interface TestMeta {
   hasClass: boolean;
   hasNumber: boolean;
   hasName: boolean;
-  /** 解答用紙にも配点を表示する */
-  showPointsOnSheet: boolean;
   paper: PaperSize;
   orientation: Orientation;
   /** 横書き / 縦書き（国語用。用紙全体を縦書きにする） */
@@ -45,7 +56,6 @@ export const DEFAULT_META: TestMeta = {
   hasClass: true,
   hasNumber: true,
   hasName: true,
-  showPointsOnSheet: true,
   paper: 'A4',
   orientation: 'portrait',
   writing: 'horizontal',

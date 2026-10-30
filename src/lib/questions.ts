@@ -19,17 +19,23 @@ export function initialState(): AppState {
   return { meta: { ...DEFAULT_META }, questions };
 }
 
-/** 直前の設問の続きとして、新しい設問を作る（大問は同じ、小問番号は数字なら +1） */
+/**
+ * 直前の設問の続きとして、新しい設問を作る。
+ * 大問は同じ、小問番号は数字なら +1。種類・マス目・大きさ・配点は直前の設問を引き継ぐ
+ * （同じ形の問題が続くとき、設定し直さずに済む）。模範解答は空。
+ */
 export function nextQuestion(prev?: Question): Question {
   const sub = prev && /^\d+$/.test(prev.sub.trim()) ? String(Number(prev.sub) + 1) : '';
   return {
     id: newId(),
     major: prev ? prev.major : '1',
     sub,
-    type: 'symbol',
-    typeManual: false,
+    type: prev ? prev.type : 'symbol',
+    typeManual: prev ? prev.typeManual : false,
     answer: '',
-    points: 5,
+    points: prev ? prev.points : 5,
+    ...(prev?.grid !== undefined ? { grid: prev.grid } : {}),
+    ...(prev?.size ? { size: { ...prev.size } } : {}),
   };
 }
 

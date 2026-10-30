@@ -1,6 +1,6 @@
 import { ActionIcon, Alert, Button, Group, Tabs } from '@mantine/core';
 import { useElementSize } from '@mantine/hooks';
-import { useDeferredValue, useMemo, useState } from 'react';
+import { useDeferredValue, useMemo, useRef, useState } from 'react';
 import { paperDims } from '../lib/constants';
 import { buildLayout, type Mode } from '../lib/layout';
 import type { Question, TestMeta } from '../lib/types';
@@ -9,8 +9,6 @@ import { Sheet } from './Sheet';
 const MM_TO_PX = 96 / 25.4;
 /** 用紙と用紙の間隔（表示上） */
 const PAGE_GAP_PX = 16;
-/** 「幅に合わせる」ときの、拡大の上限 */
-const MAX_FIT_SCALE = 1.25;
 /** ボタン1回あたりの拡大・縮小の倍率 */
 const ZOOM_STEP = 1.25;
 /** 幅に合わせた大きさを 1 としたときの、拡大・縮小の範囲 */
@@ -23,29 +21,45 @@ export function zoomed(zoom: number, step: 1 | -1): number {
   return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(next * 1000) / 1000));
 }
 
-/** 右側のプレビュー: 「解答用紙」「模範解答」のタブと、用紙を縦に並べた表示 */
-export function Preview({ meta: liveMeta, questions: liveQuestions }: { meta: TestMeta; questions: Question[] }) {
-  const [mode, setMode] = useState<Mode>('sheet');
+interface Props {
+  meta: TestMeta;
+  questions: Question[];
+  mode: Mode;
+  onModeChange: (mode: Mode) => void;
+  /** 見せない（印刷のときは出る。見えていなくても、用紙は作っておく） */
+  hidden?: boolean;
+  /** 画面が狭いとき、入力の上に右から重ねて出す */
+  drawer?: boolean;
+  onClose: () => void;
+}
+
+/** プレビュー: 「解答用紙」「模範解答」のタブと、用紙を縦に並べた表示 */
+export function Preview({ meta: liveMeta, questions: liveQuestions, mode, onModeChange, hidden, drawer, onClose }: Props) {
   /** 1 = プレビューの幅に合わせた大きさ */
   const [zoom, setZoom] = useState(1);
+  // 見えていない間は、用紙を作り直さない（入力のタブで打つたびに、見えないプレビューを描かないため）。
+  // 見せるとき・印刷のときに、最新の内容にそろえる
+  const latest = useRef({ liveMeta, liveQuestions });
+  if (!hidden) latest.current = { liveMeta, liveQuestions };
   // 入力欄の操作を優先し、プレビューの描き直しは、少し遅れてよい（入力のたびに止まらないように）
-  const meta = useDeferredValue(liveMeta);
-  const questions = useDeferredValue(liveQuestions);
+  const meta = useDeferredValue(latest.current.liveMeta);
+  const questions = useDeferredValue(latest.current.liveQuestions);
   const layout = useMemo(() => buildLayout(meta, questions), [meta, questions]);
 
   const paper = paperDims(meta.paper, meta.orientation);
   const { ref, width } = useElementSize();
   const pxW = paper.w * MM_TO_PX;
   const pxH = (paper.h - 1) * MM_TO_PX;
-  const fitScale = width > 0 ? Math.min(MAX_FIT_SCALE, width / pxW) : 0.5;
+  // 幅に合わせる（プレビューの幅いっぱいに広げる）
+  const fitScale = width > 0 ? width / pxW : 0.5;
   const scale = fitScale * zoom;
   const pages = layout.pages.length;
 
   return (
-    <section className="preview">
+    <section className={`preview${drawer ? ' drawer' : ''}${hidden ? ' is-hidden' : ''}`}>
       <div className="no-print">
         <div className="preview-head">
-          <Tabs value={mode} onChange={(v) => v && setMode(v as Mode)} style={{ flex: 1 }}>
+          <Tabs value={mode} onChange={(v) => v && onModeChange(v as Mode)} style={{ flex: 1 }}>
             <Tabs.List>
               <Tabs.Tab value="sheet">解答用紙</Tabs.Tab>
               <Tabs.Tab value="model">模範解答</Tabs.Tab>
@@ -79,6 +93,15 @@ export function Preview({ meta: liveMeta, questions: liveQuestions }: { meta: Te
               onClick={() => setZoom((z) => zoomed(z, 1))}
             >
               ＋
+            </ActionIcon>
+            <ActionIcon
+              variant="subtle"
+              color="gray"
+              aria-label="プレビューを閉じる"
+              title="プレビューを閉じる"
+              onClick={onClose}
+            >
+              ✕
             </ActionIcon>
           </Group>
         </div>

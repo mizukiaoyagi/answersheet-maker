@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { COEF } from './constants';
-import { boxSize, buildLayout, maxCellsPerRow, countChars, isNumericAnswer, paperCols, suggestType, totalPoints } from './layout';
+import {
+  boxSize,
+  buildLayout,
+  cellRuns,
+  countChars,
+  isNumericAnswer,
+  maxCellsPerRow,
+  paperCols,
+  suggestType,
+  totalPoints,
+} from './layout';
 import { sampleState } from './sample';
 import { DEFAULT_META, type Question } from './types';
 
@@ -46,15 +56,19 @@ describe('suggestType', () => {
 
 describe('boxSize', () => {
   const cols = 38;
-  it('記号は幅3固定・1行', () => {
-    expect(boxSize('symbol', 1, cols)).toEqual({ mainW: 4, rows: 1 });
+  it('記号（択一）は幅3固定・1行', () => {
+    expect(boxSize('symbol', 1, cols)).toEqual({ mainW: COEF.SYMBOL_WIDTH, rows: 1 });
+    expect(COEF.SYMBOL_WIDTH).toBe(3);
+  });
+  it('小問番号は0.5文字分（1列）', () => {
+    expect(COEF.LABEL_COLS * 2).toBe(COEF.GRID_CELL_COLS);
   });
   it('語句は1文字=2列・最小6', () => {
     expect(boxSize('word', 2, cols)).toEqual({ mainW: 6, rows: 1 });
     expect(boxSize('word', 10, cols)).toEqual({ mainW: 20, rows: 1 });
   });
   it('記述は横幅いっぱいで行数を計算（最低2行）', () => {
-    const maxMain = cols - COEF.POINTS_COLS;
+    const maxMain = cols;
     const perRow = maxCellsPerRow(maxMain);
     expect(boxSize('essay', 16, cols)).toEqual({ mainW: perRow * COEF.GRID_CELL_COLS, rows: 2 });
     expect(boxSize('essay', 40, cols).rows).toBe(Math.max(2, Math.ceil(40 / perRow)));
@@ -96,7 +110,7 @@ describe('buildLayout', () => {
     const qs = [q('1', '1', 'ア'), q('1', '2', 'イ'), q('1', '3', 'ウ')];
     const boxes = buildLayout(DEFAULT_META, qs).pages[0].cells.filter((c) => c.kind === 'box');
     expect(new Set(boxes.map((b) => b.r)).size).toBe(1);
-    expect(boxes[1].c).toBe(boxes[0].c + boxes[0].cs + COEF.POINTS_COLS + COEF.GAP_COLS + COEF.LABEL_COLS);
+    expect(boxes[1].c).toBe(boxes[0].c + boxes[0].cs + COEF.GAP_COLS + COEF.LABEL_COLS);
 
     const many = Array.from({ length: 12 }, (_, i) => q('1', String(i + 1), 'ア'));
     const boxes2 = buildLayout(DEFAULT_META, many).pages[0].cells.filter((c) => c.kind === 'box');
@@ -118,7 +132,7 @@ describe('buildLayout', () => {
     const cells = l.pages[0].cells;
     expect(cells.filter((c) => c.kind === 'group')).toHaveLength(2);
     const essay = cells.find((c) => c.kind === 'box' && c.answer.length === 30)!;
-    const perRow = maxCellsPerRow(l.cols - COEF.POINTS_COLS - COEF.LABEL_COLS);
+    const perRow = maxCellsPerRow(l.cols - COEF.LABEL_COLS);
     expect(essay.cs).toBe(perRow * COEF.GRID_CELL_COLS);
     expect(essay.rs).toBeGreaterThanOrEqual(2);
     expect(cells.filter((c) => c.kind === 'box' && c.r === essay.r)).toHaveLength(1);
@@ -165,6 +179,37 @@ describe('buildLayout', () => {
     expect(ls.usableMm).toBeLessThan(p.usableMm);
     expect(ls.pages.length).toBeGreaterThanOrEqual(1);
   });
+});
+
+describe('見出しと得点欄', () => {
+  const cellsOf = (meta = DEFAULT_META) => buildLayout(meta, [q('1', '1', 'ア')]).pages[0].cells;
+  const rightEdge = (cells: ReturnType<typeof cellsOf>, pred: (c: (typeof cells)[number]) => boolean) =>
+    Math.max(...cells.filter(pred).map((c) => c.c + c.cs));
+
+  it('タイトル → 組番号氏名 → 得点 の順で、右端がそろい、すぐ近くに並ぶ', () => {
+    const cells = cellsOf();
+    const title = cells.find((c) => c.kind === 'title')!;
+    const name = cells.find((c) => c.text === '氏名')!;
+    const score = cells.find((c) => c.text === '得点')!;
+    expect(title.r).toBeLessThan(name.r);
+    expect(name.r).toBeLessThan(score.r);
+    // 氏名の枠（氏名ラベルの右隣）と得点の欄の右端がそろう
+    expect(rightEdge(cells, (c) => c.r === name.r)).toBe(rightEdge(cells, (c) => c.r === score.r));
+    expect(rightEdge(cells, (c) => c.r === name.r)).toBe(title.c + title.cs);
+  });
+
+  it('解答欄に配点は書かない（解答用紙も模範解答も）', () => {
+    const cells = cellsOf();
+    expect(cells.some((c) => (c.kind as string) === 'pts')).toBe(false);
+    for (const mode of ['sheet', 'model'] as const)
+      for (const c of cells) for (const r of cellRuns(c, mode)) expect(r.text).not.toMatch(/\d点/);
+  });
+
+  it('小問番号は解答欄と線で区切られる', () => {
+    const label = cellsOf().find((c) => c.kind === 'label')!;
+    expect(label.border.r).toBe(true);
+  });
+
 });
 
 describe('totalPoints', () => {

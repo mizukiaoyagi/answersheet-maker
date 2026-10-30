@@ -53,21 +53,21 @@ describe('縦書きレイアウト', () => {
     expect(group1.c + group1.cs).toBeLessThan(title.c);
   });
 
-  it('問題番号・配点・得点は横書きのセルで、小問番号は欄の手前に独立している', () => {
+  it('問題番号・得点は横書きのセルで、小問番号は欄の手前に独立している', () => {
     const cells = l.pages[0].cells;
     const boxes = cells.filter((c) => c.kind === 'box');
     const labels = cells.filter((c) => c.kind === 'label');
     // 設問の数だけ小問番号のセルがある
     expect(l.pages).toHaveLength(1);
     expect(labels).toHaveLength(s.questions.length);
-    for (const c of cells.filter((x) => ['label', 'pts'].includes(x.kind))) expect(c.vertical).toBe(false);
+    for (const c of labels) expect(c.vertical).toBe(false);
     for (const c of boxes) expect(c.vertical).toBe(true);
     expect(cells.find((c) => c.text === '得点')!.vertical).toBe(false);
     expect(cells.find((c) => c.text.startsWith('／'))!.vertical).toBe(false);
     expect(cells.find((c) => c.kind === 'title')!.vertical).toBe(true);
     expect(cells.find((c) => c.kind === 'group')!.vertical).toBe(true); // 大問は縦書きのまま
-    // 小問番号の下に線は入れない
-    expect(labels.every((x) => !x.border.b)).toBe(true);
+    // 小問番号と解答欄は線で区切る（縦書きでは小問番号の下）
+    expect(labels.every((x) => x.border.b)).toBe(true);
     // ラベルは欄の物理的に上、同じ列にある
     const b = boxes[0];
     const lb = labels.find((x) => x.c === b.c && x.cs === b.cs)!;
@@ -94,6 +94,7 @@ describe('縦書きレイアウト', () => {
       sub: String((i % 4) + 1),
       answer: 'あ'.repeat(60),
       type: 'essay' as const,
+      size: undefined, // 大きさを指定すると、長い答えでも大きくならない
     }));
     const l2 = buildLayout(s.meta, many);
     expect(l2.pages.length).toBeGreaterThan(1);
