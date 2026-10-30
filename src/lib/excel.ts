@@ -54,17 +54,18 @@ function fillSheet(ws: ExcelJS.Worksheet, layout: Layout, meta: TestMeta, mode: 
       if (r2 > r1 || c2 > c1) ws.mergeCellsWithoutStyle(r1, c1, r2, c2);
 
       const master = ws.getCell(r1, c1);
+      // 小問番号と、縦書きの用紙の中の小さな横書きセル（得点・小問番号）は、折り返さずに収まるよう縮小する
+      const shrink = c.hText || c.kind === 'label';
       master.alignment = {
         horizontal: c.align,
         vertical: c.valign,
-        // 縦書きの用紙の中の小さな横書きセル（得点・配点・小問番号）は、折り返さずに収まるよう縮小する
-        wrapText: !c.hText,
-        ...(c.hText ? { shrinkToFit: true } : {}),
+        wrapText: !shrink,
+        ...(shrink ? { shrinkToFit: true } : {}),
         // 縦書きは「縦書き」（1文字ずつ上から下へ並べる）の指定にする
         ...(c.vertical ? { textRotation: 'vertical' as const } : {}),
       };
       master.font = { name: FONT.EXCEL_FAMILY, size: FONT.TEXT_PT };
-      applyValue(master, c, mode, meta.showPointsOnSheet);
+      applyValue(master, c, mode);
     }
 
     rowOffset += page.rowHeights.length;
@@ -89,8 +90,8 @@ function fillSheet(ws: ExcelJS.Worksheet, layout: Layout, meta: TestMeta, mode: 
   };
 }
 
-function applyValue(cell: ExcelJS.Cell, c: LCell, mode: Mode, showPoints: boolean) {
-  const runs = cellRuns(c, mode, showPoints);
+function applyValue(cell: ExcelJS.Cell, c: LCell, mode: Mode) {
+  const runs = cellRuns(c, mode);
   if (!runs.length) return;
   cell.value = {
     richText: runs.map((r) => ({

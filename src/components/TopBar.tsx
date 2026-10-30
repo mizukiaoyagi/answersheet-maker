@@ -4,7 +4,17 @@ import { downloadXlsx } from '../lib/excel';
 import type { Question, TestMeta } from '../lib/types';
 
 /** 上部バー: ツール名、Excel 保存、印刷 */
-export function TopBar({ meta, questions }: { meta: TestMeta; questions: Question[] }) {
+export function TopBar({
+  meta,
+  questions,
+  previewOpen,
+  onTogglePreview,
+}: {
+  meta: TestMeta;
+  questions: Question[];
+  previewOpen: boolean;
+  onTogglePreview: () => void;
+}) {
   const [exporting, setExporting] = useState(false);
   // ページをスクロールしたら、背景を少し透かす
   const [scrolled, setScrolled] = useState(false);
@@ -30,6 +40,9 @@ export function TopBar({ meta, questions }: { meta: TestMeta; questions: Questio
     <header className={`topbar no-print${scrolled ? ' scrolled' : ''}`}>
       <h1>解答用紙メーカー</h1>
       <Group gap="xs">
+        <Button variant="default" onClick={onTogglePreview} aria-pressed={previewOpen}>
+          {previewOpen ? 'プレビューを閉じる' : 'プレビューを開く'}
+        </Button>
         <Button onClick={saveExcel} loading={exporting}>
           Excelで保存
         </Button>

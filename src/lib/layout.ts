@@ -1,8 +1,11 @@
 import { COEF, COLOR, FONT, pageMargins, paperDims, type Writing } from './constants';
 import type { AnswerType, Question, TestMeta } from './types';
 
+/** 1pt の長さ mm */
+const PT_MM = 25.4 / 72;
+
 export type Mode = 'sheet' | 'model';
-export type CellKind = 'title' | 'text' | 'frame' | 'group' | 'label' | 'box' | 'grid' | 'pts';
+export type CellKind = 'title' | 'text' | 'frame' | 'group' | 'label' | 'box' | 'grid';
 
 export interface LCell {
   r: number;
@@ -13,7 +16,6 @@ export interface LCell {
   text: string;
   label: string;
   answer: string;
-  points: number | null;
   /** 物理的な左右・上下の位置（縦書きでも画面上の向き） */
   align: 'left' | 'center' | 'right';
   valign: 'top' | 'middle' | 'bottom';
@@ -104,21 +106,22 @@ export function maxCellsPerRow(maxMain: number): number {
 /**
  * ページの内容の幅（列数）。マス目を切りの良い数だけ並べた欄の幅に合わせる。
  * 見出し（タイトル・得点・組番号氏名）も欄の右端・下端にそろえるため、用紙いっぱいには広げない。
+ * 用紙との差は、左右（縦書きは上下）に均等に空ける。
  */
 export function contentCols(physCols: number): number {
   const lead = COEF.LABEL_COLS;
-  const maxMain = Math.max(1, physCols - COEF.POINTS_COLS - lead);
-  return lead + maxCellsPerRow(maxMain) * COEF.GRID_CELL_COLS + COEF.POINTS_COLS;
+  const maxMain = Math.max(1, physCols - lead);
+  return lead + maxCellsPerRow(maxMain) * COEF.GRID_CELL_COLS;
 }
 
-/** 解答を書く部分（配点・番号のセルを除く）の幅と行数。lead は欄の手前に付く番号セルの長さ */
+/** 解答を書く部分（番号のセルを除く）の幅と行数。lead は欄の手前に付く番号セルの長さ */
 export function boxSize(
   type: AnswerType,
   chars: number,
   cols: number,
   lead = 0,
 ): { mainW: number; rows: number } {
-  const maxMain = Math.max(1, cols - COEF.POINTS_COLS - lead);
+  const maxMain = Math.max(1, cols - lead);
   const cell = COEF.GRID_CELL_COLS; // 1文字ぶんの幅
   switch (type) {
     case 'symbol':
@@ -137,10 +140,30 @@ export function boxSize(
   }
 }
 
-/** マス目の字数（未指定・不正は 0） */
-export function gridCount(q: Pick<Question, 'grid'>): number {
-  const n = Math.floor(Number(q.grid) || 0);
-  return n > 0 ? n : 0;
+function clampInt(v: unknown, min: number, max: number, fallback: number): number {
+  const n = Math.floor(Number(v));
+  return Number.isFinite(n) && n >= min ? Math.min(n, max) : fallback;
+}
+
+/**
+ * 大きさを指定した欄。字数×行数になり、答えの長さは関係しない。
+ * 幅は欄に入る分まで。perRow は、1行に並べられるマスの数（マス目にするとき）。
+ */
+export function sizedBox(
+  size: Question['size'],
+  cols: number,
+  lead = 0,
+): { mainW: number; rows: number; perRow: number } {
+  const maxMain = Math.max(1, cols - lead);
+  const w = clampInt(size?.w, 1, 100, 5);
+  const rows = clampInt(size?.rows, 1, 20, 1);
+  const mainW = Math.min(w * COEF.GRID_CELL_COLS, maxMain);
+  return { mainW, rows, perRow: Math.max(1, Math.floor(mainW / COEF.GRID_CELL_COLS)) };
+}
+
+/** 改行を除いた文字数（マス目に入る文字数） */
+export function plainLength(s: string): number {
+  return [...s.replace(/[\r\n]/g, '')].length;
 }
 
 /**
@@ -148,8 +171,14 @@ export function gridCount(q: Pick<Question, 'grid'>): number {
  * 1行のときは字数ぶんのマスを欄いっぱいに。複数行のときは1文字ぶんの幅のマスを端まで並べ、
  * 最後の行の余りは空のマスにする（マスの大きさが揃い、欄の外周は閉じる）。
  */
-export function gridCells(n: number, rows: number, mainW: number): { perRow: number; widths: number[] } {
-  const perRow = rows <= 1 ? Math.max(1, n) : Math.max(1, Math.floor(mainW / COEF.GRID_CELL_COLS));
+export function gridCells(
+  n: number,
+  rows: number,
+  mainW: number,
+  /** 大きさを指定した欄: 1行でも、1文字ぶんの幅のマスを並べる（マスが足りない分は空白） */
+  fixed = false,
+): { perRow: number; widths: number[] } {
+  const perRow = rows <= 1 && !fixed ? Math.max(1, n) : Math.max(1, Math.floor(mainW / COEF.GRID_CELL_COLS));
   const w = Math.max(1, Math.floor(mainW / perRow));
   const widths = Array<number>(perRow).fill(w);
   widths[perRow - 1] = Math.max(1, mainW - w * (perRow - 1));
@@ -200,7 +229,6 @@ function cell(p: Partial<LCell> & Pick<LCell, 'r' | 'c' | 'cs' | 'kind'>): LCell
     text: '',
     label: '',
     answer: '',
-    points: null,
     align: 'left',
     valign: 'middle',
     border: { t: false, r: false, b: false, l: false },
@@ -214,12 +242,10 @@ const ALL = { t: true, r: true, b: true, l: true };
 
 interface Item {
   q: Question;
-  /** マス目の解答欄（全体の字数） */
-  grid?: { n: number };
+  /** マス目の解答欄（全体の字数。fixed は、大きさを指定した欄） */
+  grid?: { n: number; fixed: boolean };
   /** 手前の小問番号セルの長さ */
   lead: number;
-  /** 後ろの配点セルの長さ */
-  ptsW: number;
   mainW: number;
   rows: number;
   x: number;
@@ -232,12 +258,8 @@ interface Line {
   end: number;
 }
 
-/**
- * 大問内の欄を左から詰めて、入らなければ折り返す。
- * 欄の幅いっぱいの欄は、マスの切り捨てで余った幅（extra）を、小問番号と配点のセルに振り分けて、
- * 用紙の余白いっぱいまで広げる（マスの大きさは変えない）。
- */
-function packGroup(g: Question[], cols: number, lead: number, extra: number): Line[] {
+/** 大問内の欄を左から詰めて、入らなければ折り返す */
+function packGroup(g: Question[], cols: number, lead: number): Line[] {
   const lines: Line[] = [];
   let items: Item[] = [];
   let x = 0;
@@ -249,21 +271,38 @@ function packGroup(g: Question[], cols: number, lead: number, extra: number): Li
   };
   for (const q of g) {
     // 欄の大きさは、マス目があってもなくても同じ規則（マス目なら指定字数、なければ模範解答の字数）で決める
-    const n = gridCount(q);
-    // 3マス以上のマス目は、幅4の記号の欄には入らないので語句の大きさで作る
-    const type = n > COEF.SYMBOL_MAX_CHARS && q.type === 'symbol' ? 'word' : q.type;
-    const { mainW, rows } = boxSize(type, n > 0 ? n : countChars(q.answer), cols, lead);
-    const full = lead + mainW + COEF.POINTS_COLS === cols;
+    // マス目の数（0 ならマス目なし）と、マスを1文字ぶんの幅で並べる欄か（fixed）
+    let n = 0;
+    let fixed = true;
+    let size: { mainW: number; rows: number };
+    const len = plainLength(q.answer);
+    if (q.size) {
+      // 大きさを指定した欄。マス目なら、その欄をマスで埋める
+      const box = sizedBox(q.size, cols, lead);
+      if (q.grid) n = box.perRow * box.rows;
+      size = box;
+    } else if (q.grid && len > 0) {
+      // 模範解答の字数ちょうどのマス。欄の大きさもその字数で決まる
+      // 2マス以上のマス目は、記号の欄には入らないので語句の大きさで作る
+      const type = len > COEF.SYMBOL_GRID_MAX && q.type === 'symbol' ? 'word' : q.type;
+      size = boxSize(type, len, cols, lead);
+      n = len;
+      fixed = false;
+    } else {
+      // 大きさは模範解答の長さに合わせる。模範解答が空のマス目は、その大きさの欄を埋める
+      size = boxSize(q.type, countChars(q.answer), cols, lead);
+      if (q.grid) n = Math.max(1, Math.floor(size.mainW / COEF.GRID_CELL_COLS)) * size.rows;
+    }
+    const { mainW, rows } = size;
     const item: Omit<Item, 'x'> = {
       q,
-      lead: full ? lead + Math.floor(extra / 2) : lead,
-      ptsW: full ? COEF.POINTS_COLS + Math.ceil(extra / 2) : COEF.POINTS_COLS,
+      lead,
       mainW,
       rows,
-      ...(n > 0 ? { grid: { n } } : {}),
+      ...(n > 0 ? { grid: { n, fixed } } : {}),
     };
-    const total = item.lead + item.mainW + item.ptsW;
-    if (items.length && x + COEF.GAP_COLS + total > cols + extra) flush();
+    const total = item.lead + item.mainW;
+    if (items.length && x + COEF.GAP_COLS + total > cols) flush();
     const at = items.length ? x + COEF.GAP_COLS : 0;
     items.push({ ...item, x: at });
     x = at + total;
@@ -286,82 +325,82 @@ class PageBuilder {
 }
 
 /**
- * 2枚目以降（first=false）は、タイトルと組・番号・氏名を省く。
- * cols は欄の幅（マスの関係で用紙より狭い）、fullCols は用紙の余白いっぱいの幅。
- * 得点と組・番号・氏名は、マスの切り捨てを無視して fullCols の右端（縦書きは下端）に寄せる。
+ * タイトル → 組・番号・氏名 → 得点 の順に、上から並べる（2枚目以降は何も置かない）。
+ * 組・番号・氏名と得点は、答案をめくりながら探しやすいよう、すぐ近くの右端（縦書きは下端）にそろえる。
  */
-function addHeader(pb: PageBuilder, meta: TestMeta, fullCols: number, first: boolean) {
-  let r: number;
+function addHeader(pb: PageBuilder, meta: TestMeta, cols: number, first: boolean) {
   if (first) {
-    r = pb.addRow(COEF.TITLE_ROWS);
-    pb.cells.push(cell({ r, c: 0, cs: fullCols, kind: 'title', text: meta.title, align: 'center' }));
+    const r = pb.addRow(COEF.TITLE_ROWS);
+    pb.cells.push(cell({ r, c: 0, cs: cols, kind: 'title', text: meta.title, align: 'center' }));
+    addNameFields(pb, meta, cols);
+    addScore(pb, meta, cols);
   }
+  pb.addRow(COEF.SPACER_ROWS);
+}
 
-  // 得点欄（1枚目だけ）
-  if (first) {
-    r = pb.addRow(COEF.INFO_ROWS);
-    const totalW = meta.writing === 'vertical' ? COEF.SCORE_TOTAL_COLS_VERTICAL : COEF.SCORE_TOTAL_COLS;
-    const scoreW = COEF.SCORE_LABEL_COLS + COEF.SCORE_BOX_COLS + totalW;
-    pb.cells.push(
-      cell({
-        r,
-        c: fullCols - scoreW,
-        cs: COEF.SCORE_LABEL_COLS,
-        kind: 'frame',
-        text: '得点',
-        align: 'center',
-        border: ALL,
-        hText: true,
-      }),
-    );
-    pb.cells.push(
-      cell({
-        r,
-        c: fullCols - scoreW + COEF.SCORE_LABEL_COLS,
-        cs: COEF.SCORE_BOX_COLS,
-        kind: 'frame',
-        border: ALL,
-        hText: true,
-      }),
-    );
-    pb.cells.push(
-      cell({
-        r,
-        c: fullCols - totalW,
-        cs: totalW,
-        kind: 'text',
-        text: `／${meta.fullScore}`,
-        // 横書きは右下寄せ、縦書きは下の中央寄せ
-        align: 'right',
-        valign: meta.writing === 'vertical' ? 'middle' : 'bottom',
-        hText: true,
-      }),
-    );
-  }
-
-
-  // 組・番号・氏名
+function addNameFields(pb: PageBuilder, meta: TestMeta, cols: number) {
   const fields: { label: string; w: number }[] = [];
   if (meta.hasClass) fields.push({ label: '組', w: 3 });
   if (meta.hasNumber) fields.push({ label: '番号', w: 3 });
   if (meta.hasName) fields.push({ label: '氏名', w: 12 });
-  if (first && fields.length) {
-    pb.addRow(COEF.INFO_GAP_ROWS);
-    r = pb.addRow(COEF.NAME_ROWS);
-    // 左寄せ（縦書きでは上寄せ）に置く
-    const labelW = (label: string) => (label.length === 1 ? 2 : 3);
-    let x = 0;
-    fields.forEach((f, i) => {
-      if (i > 0) x += COEF.HEADER_GAP_COLS;
-      const lw = labelW(f.label);
-      pb.cells.push(cell({ r, c: x, cs: lw, kind: 'frame', text: f.label, align: 'center', border: ALL }));
-      x += lw;
-      const w = Math.min(f.w, Math.max(1, fullCols - x));
-      pb.cells.push(cell({ r, c: x, cs: w, kind: 'frame', border: ALL }));
-      x += w;
-    });
-  }
-  pb.addRow(COEF.SPACER_ROWS);
+  if (!fields.length) return;
+  pb.addRow(COEF.INFO_GAP_ROWS);
+  const r = pb.addRow(COEF.NAME_ROWS);
+  const labelW = (label: string) => (label.length === 1 ? 2 : 3);
+  const width = fields.reduce((s, f, i) => s + (i > 0 ? COEF.HEADER_GAP_COLS : 0) + labelW(f.label) + f.w, 0);
+  let x = Math.max(0, cols - width);
+  fields.forEach((f, i) => {
+    if (i > 0) x += COEF.HEADER_GAP_COLS;
+    const lw = labelW(f.label);
+    pb.cells.push(cell({ r, c: x, cs: lw, kind: 'frame', text: f.label, align: 'center', border: ALL }));
+    x += lw;
+    const w = Math.min(f.w, Math.max(1, cols - x));
+    pb.cells.push(cell({ r, c: x, cs: w, kind: 'frame', border: ALL }));
+    x += w;
+  });
+}
+
+/** 得点欄: 「得点」の枠と、満点 */
+function addScore(pb: PageBuilder, meta: TestMeta, cols: number) {
+  pb.addRow(COEF.INFO_GAP_ROWS);
+  const r = pb.addRow(COEF.INFO_ROWS);
+  const totalW = meta.writing === 'vertical' ? COEF.SCORE_TOTAL_COLS_VERTICAL : COEF.SCORE_TOTAL_COLS;
+  const scoreW = COEF.SCORE_LABEL_COLS + COEF.SCORE_BOX_COLS + totalW;
+  pb.cells.push(
+    cell({
+      r,
+      c: cols - scoreW,
+      cs: COEF.SCORE_LABEL_COLS,
+      kind: 'frame',
+      text: '得点',
+      align: 'center',
+      border: ALL,
+      hText: true,
+    }),
+  );
+  pb.cells.push(
+    cell({
+      r,
+      c: cols - scoreW + COEF.SCORE_LABEL_COLS,
+      cs: COEF.SCORE_BOX_COLS,
+      kind: 'frame',
+      border: ALL,
+      hText: true,
+    }),
+  );
+  pb.cells.push(
+    cell({
+      r,
+      c: cols - totalW,
+      cs: totalW,
+      kind: 'text',
+      text: `／${meta.fullScore}`,
+      // 横書きは右下寄せ、縦書きは下の中央寄せ
+      align: 'right',
+      valign: meta.writing === 'vertical' ? 'middle' : 'bottom',
+      hText: true,
+    }),
+  );
 }
 
 function addGroupHeader(pb: PageBuilder, cols: number, text: string) {
@@ -376,9 +415,9 @@ function addLine(pb: PageBuilder, line: Line, prevEnd: number | null, vertical: 
   pb.bodyUnits += line.h;
   for (const it of line.items) {
     // 上の行の欄の下罫線を共有できるなら上罫線は省く
-    const top = !(prevEnd !== null && it.x + it.lead + it.mainW + it.ptsW <= prevEnd);
+    const top = !(prevEnd !== null && it.x + it.lead + it.mainW <= prevEnd);
     const left = it.x === 0 || COEF.GAP_COLS > 0;
-    // 小問番号は、欄の手前に独立したセルとして置く（横書きも縦書きも同じ）
+    // 小問番号は、欄の手前に独立したセルとして置き、解答欄とは線で区切る（横書きも縦書きも同じ）
     const rs = it.grid ? it.rows : line.h;
     pb.cells.push(
       cell({
@@ -391,7 +430,7 @@ function addLine(pb: PageBuilder, line: Line, prevEnd: number | null, vertical: 
         align: 'center',
         valign: 'middle',
         hText: true,
-        border: { t: top, b: true, l: left, r: false },
+        border: { t: top, b: true, l: left, r: true },
       }),
     );
     if (it.grid) {
@@ -399,7 +438,7 @@ function addLine(pb: PageBuilder, line: Line, prevEnd: number | null, vertical: 
       // 隣と重ならないようにする。マスが足りない部分は空白にして、欄全体の外周を閉じる
       const n = it.grid.n;
       const chars = [...it.q.answer.replace(/[\r\n]/g, '')];
-      const { perRow, widths } = gridCells(n, it.rows, it.mainW);
+      const { perRow, widths } = gridCells(n, it.rows, it.mainW, it.grid.fixed);
       const x0 = it.x + it.lead;
       const edges = widths.reduce<number[]>((acc, w) => [...acc, acc[acc.length - 1] + w], [0]);
       for (let i = 0; i < n; i++) {
@@ -456,25 +495,10 @@ function addLine(pb: PageBuilder, line: Line, prevEnd: number | null, vertical: 
           answer: it.q.answer,
           // 解答は欄の真ん中に寄せる（横書きは上下、縦書きは左右）
           valign: 'middle',
-          border: { t: top, b: true, l: false, r: false },
+          border: { t: top, b: true, l: false, r: true },
         }),
       );
     }
-    pb.cells.push(
-      cell({
-        r: row,
-        c: it.x + it.lead + it.mainW,
-        rs,
-        cs: it.ptsW,
-        kind: 'pts',
-        points: it.q.points,
-        align: 'right',
-        // 縦書きでは欄の下端の左右中央に置く（横書きは右下）
-        valign: vertical ? 'middle' : 'bottom',
-        hText: true,
-        border: { t: top, b: true, l: false, r: true },
-      }),
-    );
   }
 }
 
@@ -532,6 +556,8 @@ export function buildLayout(meta: TestMeta, questions: Question[]): Layout {
   const vertical = meta.writing === 'vertical';
   const physCols = paperCols(meta.paper, meta.orientation, meta.writing);
   const cols = contentCols(physCols);
+  // 内容は用紙の中央に置く（左右、縦書きは上下に同じだけ空ける）
+  const offset = Math.floor((physCols - cols) / 2);
   const { w, h } = paperDims(meta.paper, meta.orientation);
   const mg = pageMargins(meta.writing);
   const usableMm = h - mg.y * 2;
@@ -542,7 +568,7 @@ export function buildLayout(meta: TestMeta, questions: Question[]): Layout {
   const pages: PageBuilder[] = [];
   const newPage = () => {
     const pb = new PageBuilder();
-    addHeader(pb, meta, physCols, pages.length === 0);
+    addHeader(pb, meta, cols, pages.length === 0);
     pages.push(pb);
     return pb;
   };
@@ -558,7 +584,7 @@ export function buildLayout(meta: TestMeta, questions: Question[]): Layout {
 
   for (const g of groups) {
     const label = groupLabel(g[0].major, vertical);
-    const lines = packGroup(g, cols, COEF.LABEL_COLS, physCols - cols);
+    const lines = packGroup(g, cols, COEF.LABEL_COLS);
     // 大問の見出しだけが前のページに取り残されないよう、見出し＋最初の行が入るか確認する
     if (cur.bodyUnits > 0 && cur.units + COEF.GROUP_ROWS + lines[0].h > usableUnits) cur = newPage();
     addGroupHeader(cur, cols, label);
@@ -575,6 +601,7 @@ export function buildLayout(meta: TestMeta, questions: Question[]): Layout {
   }
 
   const fits = pages.every((pb) => pb.units <= usableUnits);
+  for (const pb of pages) for (const c of pb.cells) c.c += offset;
   const out = pages.map((pb) =>
     vertical
       ? toVertical(pb, physCols, usableUnits, COEF.COL_MM, COEF.ROW_MM)
@@ -585,7 +612,16 @@ export function buildLayout(meta: TestMeta, questions: Question[]): Layout {
 
 // ---------- セルの表示内容（プレビュー・Excel 共通） ----------
 
-export function cellRuns(c: LCell, mode: Mode, showPointsOnSheet = true): Run[] {
+/** 小問番号の文字サイズ。幅（0.5文字分）に収まるよう、文字数に合わせて小さくする */
+function labelPt(c: LCell): number {
+  // 縦書きの用紙では横書きの幅に余裕があるので、そのままの大きさ
+  if (c.hText) return FONT.LABEL_PT;
+  const avail = c.cs * COEF.COL_MM - 1;
+  const fit = Math.floor((avail / PT_MM / Math.max(1, countChars(c.label))) * 2) / 2;
+  return Math.max(5, Math.min(FONT.LABEL_PT, fit));
+}
+
+export function cellRuns(c: LCell, mode: Mode): Run[] {
   const black = COLOR.BLACK;
   // 縦書きでは半角スペースも1文字分の高さを取って間延びするので、タイトル等からは省く
   const text = c.vertical ? c.text.replace(/ /g, '') : c.text;
@@ -602,16 +638,13 @@ export function cellRuns(c: LCell, mode: Mode, showPointsOnSheet = true): Run[] 
     case 'group':
       return text ? [{ text, pt: FONT.TEXT_PT, color: black, bold: true }] : [];
     case 'label':
-      return c.label ? [{ text: c.label, pt: FONT.H_TEXT_PT, color: COLOR.LABEL }] : [];
+      return c.label ? [{ text: c.label, pt: labelPt(c), color: COLOR.LABEL }] : [];
     case 'box': {
       const ans = mode === 'model' ? c.answer : '';
       return ans ? [{ text: ans, pt: FONT.ANSWER_PT, color: COLOR.RED }] : [];
     }
     case 'grid':
       return mode === 'model' && c.answer ? [{ text: c.answer, pt: FONT.GRID_PT, color: COLOR.RED }] : [];
-    case 'pts':
-      if (c.points === null || (mode === 'sheet' && !showPointsOnSheet)) return [];
-      return [{ text: `${c.points}点`, pt: FONT.POINTS_PT, color: mode === 'model' ? COLOR.RED : COLOR.BLACK }];
   }
 }
 

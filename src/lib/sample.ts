@@ -1,8 +1,8 @@
 import { newId } from './id';
 import { suggestType } from './layout';
-import type { AppState, Question } from './types';
+import type { AppState, BoxSize, Question } from './types';
 
-type Row = [major: string, sub: string, answer: string, points: number, grid?: number];
+type Row = [major: string, sub: string, answer: string, points: number, grid?: boolean, size?: BoxSize];
 
 export type SampleKind = 'one' | 'two' | 'vertical';
 
@@ -19,12 +19,12 @@ const science: Row[] = [
   ['2', '2', '振動数', 5],
   ['2', '3', '1020m', 5],
   ['2', '4', 'エ', 5],
-  ['3', '1', 'ニュートン', 5, 5],
+  ['3', '1', 'ニュートン', 5, true],
   ['3', '2', '100Pa', 5],
   ['3', '3', 'イ', 5],
   ['4', '1', '物体が焦点の外側にあるとき、スクリーン上に上下左右が逆向きの実像ができる。', 15],
   ['4', '2', '音源の振動数が多いほど音は高くなり、振幅が大きいほど音は大きくなる。', 15],
-  ['4', '3', '同じ力でも、力がはたらく面積が小さいほど圧力は大きくなる。', 15, 40],
+  ['4', '3', '同じ力でも、力がはたらく面積が小さいほど圧力は大きくなる。', 15, true],
 ];
 
 /**
@@ -54,7 +54,7 @@ const history: Row[] = [
   ['4', '4', '御恩と奉公', 2],
   ['4', '5', '執権', 2],
   ['4', '6', '承久の乱', 2],
-  ['4', '7', '将軍は御家人に領地を保障し、御家人は戦いのときに将軍のために命がけで戦った。', 9, 45],
+  ['4', '7', '将軍は御家人に領地を保障し、御家人は戦いのときに将軍のために命がけで戦った。', 9, true],
   ['4', '8', '元軍は集団戦法や火薬を使った兵器で御家人を苦しめたが、暴風雨もあり撤退した。', 9],
   ['5', '1', '足利義満', 2],
   ['5', '2', '応仁の乱', 2],
@@ -66,15 +66,36 @@ const history: Row[] = [
 
 /**
  * 国語・B4横の縦書きサンプル。
- * 漢字、記号、抜き出し、記述（40字・50字のマス目つき）が入っている。
+ * 大問1は漢字20問（読み10・書き10。欄の大きさを4字×1行に指定して、すべて同じ）。そのあとに記号、抜き出し、記述（40字・50字のマス目つき）が入っている。
  */
+/** 大問1の漢字の欄は、答えの長さに関係なく、すべて同じ大きさ（4字×1行）にする。答えは4字以内 */
+const KANJI_BOX: BoxSize = { w: 4, rows: 1 };
+/** 大問1: 漢字の読み10問・書き10問 */
+const kanji: Row[] = [
+  'おだやか',
+  'さかい',
+  'してき',
+  'やしなう',
+  'きちょう',
+  'かんけつ',
+  'まねく',
+  'つとめる',
+  'ちぢむ',
+  'たがいに',
+  '幼稚',
+  '豊か',
+  '耕す',
+  '収穫',
+  '提案',
+  '興味',
+  '産業',
+  '解剖',
+  '険しい',
+  '承る',
+].map((answer, i): Row => ['1', String(i + 1), answer, 1, undefined, KANJI_BOX]);
+
 const japanese: Row[] = [
-  ['1', '1', 'おだやか', 4],
-  ['1', '2', '著しい', 4],
-  ['1', '3', '指摘', 4],
-  ['1', '4', '養う', 4],
-  ['1', '5', '貴重', 3],
-  ['1', '6', 'ようち', 3],
+  ...kanji,
   ['2', '1', '自然環境', 4],
   ['2', '2', 'ウ', 4],
   ['2', '3', 'イ', 4],
@@ -82,11 +103,11 @@ const japanese: Row[] = [
   ['2', '5', '具体的な事例を挙げて説明することで、読み手が筆者の主張を身近な問題として捉えられるようにしている。', 10],
   ['3', '1', 'ア', 4],
   ['3', '2', '不安', 4],
-  ['3', '3', '「僕」は、友人の言葉をきっかけに、自分の弱さを認めて前に進もうと決意したから。', 10, 40],
+  ['3', '3', '「僕」は、友人の言葉をきっかけに、自分の弱さを認めて前に進もうと決意したから。', 10, true],
   ['3', '4', '夕焼けの情景が、「僕」の晴れやかな気持ちを暗示している。', 10],
   ['4', '1', '春はあけぼの', 4],
   ['4', '2', 'エ', 4],
-  ['4', '3', '清少納言は、移り変わる季節の中で最も美しいと感じる時間帯を、自分の感性で選び取っている。', 10, 50],
+  ['4', '3', '清少納言は、移り変わる季節の中で最も美しいと感じる時間帯を、自分の感性で選び取っている。', 12, true],
 ];
 
 const SAMPLES: Record<
@@ -108,13 +129,14 @@ const SAMPLES: Record<
 
 export function sampleState(kind: SampleKind = 'one'): AppState {
   const { rows, meta, layout } = SAMPLES[kind];
-  const questions: Question[] = rows.map(([major, sub, answer, points, grid]) => ({
+  const questions: Question[] = rows.map(([major, sub, answer, points, grid, size]) => ({
     id: newId(),
     major,
     sub,
     answer,
     points,
-    ...(grid ? { grid } : {}),
+    ...(grid ? { grid: true } : {}),
+    ...(size ? { size: { ...size } } : {}),
     type: suggestType(answer),
     typeManual: false,
   }));
@@ -124,7 +146,6 @@ export function sampleState(kind: SampleKind = 'one'): AppState {
       hasClass: true,
       hasNumber: true,
       hasName: true,
-      showPointsOnSheet: true,
       paper: 'A4',
       orientation: 'portrait',
       writing: 'horizontal',

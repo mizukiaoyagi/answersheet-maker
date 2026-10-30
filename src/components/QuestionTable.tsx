@@ -134,14 +134,14 @@ export function QuestionTable({
       <div className="table-scroll">
         <table className="q-table">
           <colgroup>
-            <col style={{ width: 36 }} />
-            <col style={{ width: 64 }} />
-            <col style={{ width: 64 }} />
-            <col style={{ width: 104 }} />
+            <col className="col-handle" />
+            <col className="col-major" />
+            <col className="col-sub" />
+            <col className="col-type" />
             <col />
-            <col style={{ width: 84 }} />
-            <col style={{ width: 80 }} />
-            <col style={{ width: 52 }} />
+            <col className="col-grid" />
+            <col className="col-points" />
+            <col className="col-delete" />
           </colgroup>
           <thead>
             <tr>
@@ -150,7 +150,7 @@ export function QuestionTable({
               <th>小問</th>
               <th>種類</th>
               <th>模範解答</th>
-              <th>マス目</th>
+              <th>大きさ・マス目</th>
               <th>配点</th>
               <th>削除</th>
             </tr>

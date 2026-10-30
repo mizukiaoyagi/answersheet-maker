@@ -82,7 +82,7 @@ function SheetImpl({ page, meta, mode }: { page: PageLayout; meta: TestMeta; mod
     <div className="sheet" style={sheetStyle} data-mode={mode}>
       <div className="sheet-grid" style={gridStyle}>
         {page.cells.map((c, i) => {
-          const runs = cellRuns(c, mode, meta.showPointsOnSheet);
+          const runs = cellRuns(c, mode);
           const style: CSSProperties = {
             gridRow: `${c.r + 1} / span ${c.rs}`,
             gridColumn: `${c.c + 1} / span ${c.cs}`,
@@ -90,8 +90,8 @@ function SheetImpl({ page, meta, mode }: { page: PageLayout; meta: TestMeta; mod
             ...(c.vertical
               ? { flexDirection: 'row', justifyContent: JUSTIFY_X[c.align], alignItems: JUSTIFY[c.valign] }
               : { justifyContent: JUSTIFY[c.valign], textAlign: c.align }),
-            // 配点は折り返さない（縦書きで列が割れるのを防ぐ）
-            ...(c.kind === 'pts' || c.hText ? { whiteSpace: 'nowrap' as const } : {}),
+            // 小問番号は折り返さない（縦書きで列が割れるのを防ぐ）
+            ...(c.kind === 'label' || c.hText ? { whiteSpace: 'nowrap' as const } : {}),
           };
           return (
             <div key={i} className={c.vertical ? 'sheet-cell vcell' : c.hText ? 'sheet-cell hcell' : 'sheet-cell'} style={style}>
