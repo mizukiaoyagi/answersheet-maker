@@ -4,32 +4,77 @@ import type { AppState, BoxSize, Question } from './types';
 
 type Row = [major: string, sub: string, answer: string, points: number, grid?: boolean, size?: BoxSize];
 
-export type SampleKind = 'one' | 'two' | 'vertical';
+/** 用紙・書き方ごとに1つ */
+export type SampleKind = 'math' | 'japanese' | 'social' | 'kanji';
+
+/** 漢字の欄は、答えの長さに関係なく、すべて同じ大きさ（字数×1行）にする。答えは4字以内 */
+/** 漢字の読み10問・書き10問 */
+const KANJI_ANSWERS = [
+  'おだやか',
+  'さかい',
+  'してき',
+  'やしなう',
+  'きちょう',
+  'かんけつ',
+  'まねく',
+  'つとめる',
+  'ちぢむ',
+  'たがいに',
+  '幼稚',
+  '豊か',
+  '耕す',
+  '収穫',
+  '提案',
+  '興味',
+  '産業',
+  '解剖',
+  '険しい',
+  '承る',
+];
+const kanjiRows = (points: number, major: string, w: number): Row[] =>
+  KANJI_ANSWERS.map((answer, i): Row => [major, String(i + 1), answer, points, undefined, { w, rows: 1 }]);
 
 /**
- * 理科・A4縦で1枚に収まるサンプル。
- * 記号・語句・計算・記述が一通り入り、「ニュートン」と圧力の説明にはマス目を指定している。
+ * 数学・A4縦の横書きで、2枚にわたるサンプル。
+ * 計算と方程式は、答えの長さが違っても欄の大きさをそろえている。
+ * いちばん下の大問7は、作図をするための大きな枠。
  */
-const science: Row[] = [
-  ['1', '1', '焦点', 5],
-  ['1', '2', '全反射', 5],
-  ['1', '3', 'ウ', 5],
-  ['1', '4', '虚像', 5],
-  ['2', '1', '振幅', 5],
-  ['2', '2', '振動数', 5],
-  ['2', '3', '1020m', 5],
-  ['2', '4', 'エ', 5],
-  ['3', '1', 'ニュートン', 5, true],
-  ['3', '2', '100Pa', 5],
-  ['3', '3', 'イ', 5],
-  ['4', '1', '物体が焦点の外側にあるとき、スクリーン上に上下左右が逆向きの実像ができる。', 15],
-  ['4', '2', '音源の振動数が多いほど音は高くなり、振幅が大きいほど音は大きくなる。', 15],
-  ['4', '3', '同じ力でも、力がはたらく面積が小さいほど圧力は大きくなる。', 15, true],
+const CALC_BOX: BoxSize = { w: 4, rows: 1 };
+const EQUATION_BOX: BoxSize = { w: 7, rows: 1 };
+/** 作図の枠の高さ（行数）。2枚目の下の余白まで届く大きさ */
+const DRAWING_ROWS = 16;
+const math: Row[] = [
+  ...['-3', '12', '7/6', '-8x', '2√3', 'x²-9', '5', '0.2', '-1/2', '4a'].map(
+    (a, i): Row => ['1', String(i + 1), a, 2, undefined, CALC_BOX],
+  ),
+  ...['x=4', 'x=-2', 'x=3', 'x<5', 'y=2x+1', 'x=±3', 'x=2,y=1', 'a=-4'].map(
+    (a, i): Row => ['2', String(i + 1), a, 2, undefined, EQUATION_BOX],
+  ),
+  ['3', '1', 'y=3x-2', 3],
+  ['3', '2', '(2, 4)', 3],
+  ['3', '3', '12cm²', 3],
+  ['3', '4', 'ウ', 3],
+  ['3', '5', 'xが1増えるとyが3増えるので、変化の割合は3である。', 4],
+  ['4', '1', '8', 2],
+  ['4', '2', '7.5', 2],
+  ['4', '3', 'ウ', 2],
+  ['4', '4', 'どちらの階級にも同じ人数が入るので、中央値は6.5になる。', 4],
+  ['5', '1', '1/6', 2],
+  ['5', '2', '5/12', 2],
+  ['5', '3', 'ウ', 2],
+  ['5', '4', 'すべての場合は36通りで、条件に合う場合は6通りだから、確率は1/6である。', 3],
+  ['6', '1', '45°', 3],
+  ['6', '2', '6π', 3],
+  ['6', '3', 'イ', 3],
+  ['6', '4', '三角形の内角の和は180°だから、残りの角は45°になる。', 4],
+  ['6', '5', '平行四辺形の対角線はそれぞれの中点で交わるから、△ABEと△CDEは合同になる。', 5, true],
+  ['6', '6', '二等辺三角形の底角は等しいから、∠ABC=∠ACBとなり、△ABCは二等辺三角形である。', 5, true],
+  ['7', '1', '図のとおり', 6, undefined, { w: 15, rows: DRAWING_ROWS }],
 ];
 
 /**
- * 社会（歴史）・A4縦で2枚にわたるサンプル。大問4が1枚目から2枚目へ続く。
- * 大問4の最後の問いにマス目（45字）を指定している。
+ * 社会（歴史）・B4縦の横書きサンプル。
+ * 大問4の(7)にマス目を指定している。
  */
 const history: Row[] = [
   ['1', '1', '卑弥呼', 2],
@@ -66,36 +111,10 @@ const history: Row[] = [
 
 /**
  * 国語・B4横の縦書きサンプル。
- * 大問1は漢字20問（読み10・書き10。欄の大きさを4字×1行に指定して、すべて同じ）。そのあとに記号、抜き出し、記述（40字・50字のマス目つき）が入っている。
+ * 大問1は漢字20問（欄の大きさをすべて同じに指定）。そのあとに記号、抜き出し、記述（マス目つき）が入っている。
  */
-/** 大問1の漢字の欄は、答えの長さに関係なく、すべて同じ大きさ（4字×1行）にする。答えは4字以内 */
-const KANJI_BOX: BoxSize = { w: 4, rows: 1 };
-/** 大問1: 漢字の読み10問・書き10問 */
-const kanji: Row[] = [
-  'おだやか',
-  'さかい',
-  'してき',
-  'やしなう',
-  'きちょう',
-  'かんけつ',
-  'まねく',
-  'つとめる',
-  'ちぢむ',
-  'たがいに',
-  '幼稚',
-  '豊か',
-  '耕す',
-  '収穫',
-  '提案',
-  '興味',
-  '産業',
-  '解剖',
-  '険しい',
-  '承る',
-].map((answer, i): Row => ['1', String(i + 1), answer, 1, undefined, KANJI_BOX]);
-
 const japanese: Row[] = [
-  ...kanji,
+  ...kanjiRows(1, '1', 4),
   ['2', '1', '自然環境', 4],
   ['2', '2', 'ウ', 4],
   ['2', '3', 'イ', 4],
@@ -113,22 +132,42 @@ const japanese: Row[] = [
 const SAMPLES: Record<
   SampleKind,
   {
+    /** 「サンプルを読み込む」の項目名 */
+    label: string;
     rows: Row[];
-    meta: Pick<AppState['meta'], 'title'>;
-    layout?: Pick<AppState['meta'], 'paper' | 'orientation' | 'writing'>;
+    meta: Pick<AppState['meta'], 'title' | 'paper' | 'orientation' | 'writing'>;
   }
 > = {
-  one: { rows: science, meta: { title: '理科 小テスト（光・音・圧力）' } },
-  vertical: {
-    rows: japanese,
-    meta: { title: '国語 小テスト（説明文・小説・古文）' },
-    layout: { paper: 'B4', orientation: 'landscape', writing: 'vertical' },
+  math: {
+    label: 'A4数学（横書き）',
+    rows: math,
+    meta: { title: '数学中間考査', paper: 'A4', orientation: 'portrait', writing: 'horizontal' },
   },
-  two: { rows: history, meta: { title: '社会 小テスト（古代〜中世の日本）' } },
+  japanese: {
+    label: 'B4国語（縦書き）',
+    rows: japanese,
+    meta: { title: '国語中間考査', paper: 'B4', orientation: 'landscape', writing: 'vertical' },
+  },
+  social: {
+    label: 'B4社会（横書き）',
+    rows: history,
+    meta: { title: '社会期末考査', paper: 'B4', orientation: 'portrait', writing: 'horizontal' },
+  },
+  kanji: {
+    label: 'B5漢字（縦書き）',
+    // 小テストなので、大問番号は付けない（「(1)」〜「(20)」だけ）。欄は6字ぶん
+    rows: kanjiRows(5, '', 6),
+    meta: { title: '漢字小テスト', paper: 'B5', orientation: 'landscape', writing: 'vertical' },
+  },
 };
 
-export function sampleState(kind: SampleKind = 'one'): AppState {
-  const { rows, meta, layout } = SAMPLES[kind];
+/** 「サンプルを読み込む」に並べる項目 */
+export const SAMPLE_LIST: { kind: SampleKind; label: string }[] = (['math', 'japanese', 'social', 'kanji'] as const).map(
+  (kind) => ({ kind, label: SAMPLES[kind].label }),
+);
+
+export function sampleState(kind: SampleKind = 'math'): AppState {
+  const { rows, meta } = SAMPLES[kind];
   const questions: Question[] = rows.map(([major, sub, answer, points, grid, size]) => ({
     id: newId(),
     major,
@@ -142,15 +181,11 @@ export function sampleState(kind: SampleKind = 'one'): AppState {
   }));
   return {
     meta: {
-      ...meta,
       hasClass: true,
       hasNumber: true,
       hasName: true,
-      paper: 'A4',
-      orientation: 'portrait',
-      writing: 'horizontal',
-      ...layout,
       fullScore: 100,
+      ...meta,
     },
     questions,
   };

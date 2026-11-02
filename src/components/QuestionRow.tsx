@@ -68,6 +68,7 @@ export const QuestionRow = memo(function QuestionRow({
       </td>
       <td>
         <TextInput
+          data-nav="major"
           aria-label={`${no} 大問番号`}
           value={q.major}
           onChange={(e) => onUpdate(q.id, { major: e.currentTarget.value })}
@@ -75,6 +76,7 @@ export const QuestionRow = memo(function QuestionRow({
       </td>
       <td>
         <TextInput
+          data-nav="sub"
           aria-label={`${no} 小問番号`}
           value={q.sub}
           onChange={(e) => onUpdate(q.id, { sub: e.currentTarget.value })}
@@ -82,6 +84,7 @@ export const QuestionRow = memo(function QuestionRow({
       </td>
       <td>
         <Select
+          data-nav="type"
           aria-label={`${no} 解答の種類`}
           allowDeselect={false}
           data={TYPE_OPTIONS}
@@ -101,6 +104,7 @@ export const QuestionRow = memo(function QuestionRow({
       </td>
       <td>
         <Textarea
+          data-nav="answer"
           aria-label={`${no} 模範解答`}
           autosize
           minRows={1}
@@ -115,7 +119,8 @@ export const QuestionRow = memo(function QuestionRow({
         {/* 大きさ（字数×行数。空なら模範解答の長さに合わせる）と、マス目にするか */}
         <Group gap={4} wrap="nowrap">
           <NumberInput
-            aria-label={`${no} 欄の1行の字数`}
+            data-nav="w"
+          aria-label={`${no} 欄の1行の字数`}
             placeholder="自動"
             min={1}
             max={100}
@@ -126,6 +131,7 @@ export const QuestionRow = memo(function QuestionRow({
             onChange={(v) => setSize(typeof v === 'number' && v > 0 ? { w: v, rows: q.size?.rows ?? 1 } : undefined)}
           />
           <NumberInput
+            data-nav="rows"
             aria-label={`${no} 欄の行数`}
             placeholder="行"
             disabled={!q.size}
@@ -150,6 +156,7 @@ export const QuestionRow = memo(function QuestionRow({
       </td>
       <td>
         <NumberInput
+          data-nav="points"
           aria-label={`${no} 配点`}
           min={0}
           step={1}

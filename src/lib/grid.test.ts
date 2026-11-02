@@ -116,7 +116,7 @@ describe('マス目', () => {
   });
 
   it('サンプルのマス目は、模範解答の字数ちょうどのマスになる', () => {
-    for (const kind of ['one', 'vertical'] as const) {
+    for (const kind of ['math', 'japanese'] as const) {
       const s = sampleState(kind);
       const l = buildLayout(s.meta, s.questions);
       const want = s.questions.filter((y) => y.grid && !y.size).reduce((n, y) => n + plainLength(y.answer), 0);

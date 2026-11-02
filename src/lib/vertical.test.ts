@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { boxLabel, buildLayout, groupLabel, paperCols, toKanjiNumber, totalPoints } from './layout';
+import { boxLabel, buildLayout, contentCols, groupLabel, paperCols, toKanjiNumber, totalPoints } from './layout';
 import { sampleState } from './sample';
 import { buildWorkbook } from './excel';
+import { COEF, pageMargins } from './constants';
 
 const overlaps = (a: { r: number; c: number; rs: number; cs: number }, b: typeof a) =>
   a.r < b.r + b.rs && b.r < a.r + a.rs && a.c < b.c + b.cs && b.c < a.c + a.cs;
 
 describe('縦書きレイアウト', () => {
-  const s = sampleState('vertical');
+  const s = sampleState('japanese');
   const l = buildLayout(s.meta, s.questions);
 
   it('国語サンプルは満点100・縦書き・B4横', () => {
@@ -24,6 +25,36 @@ describe('縦書きレイアウト', () => {
       expect(p.heightMm).toBeLessThanOrEqual(l.usableMm);
       expect(p.colWidths.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(344);
     }
+  });
+
+  it('上の余白は固定（10mm）で、内容は上に詰め、余りは下に回る', () => {
+    expect(pageMargins('vertical').y).toBe(10);
+    // 一番上（文字の進む方向の先頭）は、列0から始まる。右上にタイトルが来る
+    const p = l.pages[0];
+    expect(Math.min(...p.cells.map((c) => c.r))).toBe(0);
+    // 余りは下側にある
+    const bottom = Math.max(...p.cells.map((c) => c.r + c.rs));
+    expect(bottom).toBeLessThanOrEqual(p.rowHeights.length);
+  });
+
+  it('欄は用紙の使える長さいっぱいまで並べる（下に余白があるのに次の行へ送らない）', () => {
+    // 5字ぶんの欄（小問番号と合わせて11列）4つは、解答欄の幅（41列）には入らないが、
+    // 用紙の使える長さ（l.cols）には入るので、同じ行（縦書きでは同じ列）に並ぶ
+    const four = Array.from({ length: 5 }, (_, i) => ({
+      ...s.questions[0],
+      id: `f${i}`,
+      major: '1',
+      sub: String(i + 1),
+      size: { w: 5, rows: 1 },
+    }));
+    expect(4 * (COEF.LABEL_COLS + 5 * COEF.GRID_CELL_COLS)).toBeGreaterThan(contentCols(l.cols));
+    expect(4 * (COEF.LABEL_COLS + 5 * COEF.GRID_CELL_COLS)).toBeLessThanOrEqual(l.cols);
+    const cells = buildLayout(s.meta, four).pages[0].cells;
+    const first4 = cells.filter((c) => c.kind === 'label').slice(0, 4);
+    expect(new Set(first4.map((c) => c.c)).size).toBe(1);
+    // 並べた欄の長さは、用紙の使える長さ（l.cols）に収まる
+    const end = Math.max(...cells.filter((c) => c.c === first4[0].c).map((c) => c.r + c.rs));
+    expect(end).toBeLessThanOrEqual(l.cols);
   });
 
   it('全ページで列の構成が同じ（Excel の列幅を共有するため）', () => {
@@ -127,12 +158,14 @@ describe('国語（縦書き）の大問番号は漢数字', () => {
     expect(boxLabel({ major: '3', sub: '2' }, true)).toBe('(2)'); // 小問は数字のまま
   });
 
-  it('国語サンプルの見出しは「大問一」〜、横書きサンプルは「大問1」〜', () => {
-    const v = sampleState('vertical');
-    const vt = buildLayout(v.meta, v.questions).pages[0].cells.filter((c) => c.kind === 'group').map((c) => c.text);
-    expect(vt).toEqual(['大問一', '大問二', '大問三', '大問四']);
-    const h = sampleState('one');
-    const ht = buildLayout(h.meta, h.questions).pages[0].cells.filter((c) => c.kind === 'group').map((c) => c.text);
-    expect(ht).toEqual(['大問1', '大問2', '大問3', '大問4']);
+  it('縦書きサンプルの見出しは「大問一」〜、横書きサンプルは「大問1」〜', () => {
+    const groups = (kind: 'japanese' | 'math') => {
+      const x = sampleState(kind);
+      return buildLayout(x.meta, x.questions).pages.flatMap((p) =>
+        p.cells.filter((c) => c.kind === 'group').map((c) => c.text),
+      );
+    };
+    expect(groups('japanese')).toEqual(['大問一', '大問二', '大問三', '大問四']);
+    expect(groups('math')).toEqual(['大問1', '大問2', '大問3', '大問4', '大問5', '大問6', '大問7']);
   });
 });
