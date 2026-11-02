@@ -40,7 +40,10 @@ const onNavKey = (e: React.KeyboardEvent<HTMLElement>) => {
   if (isSelect && el.getAttribute('aria-expanded') === 'true') return;
   const collapsed = el.selectionStart === el.selectionEnd;
   const atStart = collapsed && el.selectionStart === 0;
-  const atEnd = collapsed && el.selectionEnd === el.value.length;
+  // 数値の欄は「10字」のように単位が付くので、数字の終わりを末尾とみなす
+  const numeric = col === 'w' || col === 'rows' || col === 'points';
+  const textEnd = numeric ? el.value.replace(/\D*$/, '').length : el.value.length;
+  const atEnd = collapsed && (el.selectionEnd ?? 0) >= textEnd;
   const multiline = el instanceof HTMLTextAreaElement;
 
   let dx = 0;
@@ -79,8 +82,17 @@ const onNavKey = (e: React.KeyboardEvent<HTMLElement>) => {
     for (let i = NAV_COLS.indexOf(col) + dx; row && !target && i >= 0 && i < NAV_COLS.length; i += dx)
       target = findField(row, NAV_COLS[i]);
   }
-  if (!target) return;
+  if (!target) {
+    // 端の行でも、数値の欄の上下キーで値が増減しないようにする
+    if (dy && numeric && e.key !== 'Enter') {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    return;
+  }
+  // 数値の欄が自分で受け取る上下キー（値の増減）より先に処理するため、ここで止める
   e.preventDefault();
+  e.stopPropagation();
   focusField(target, dx < 0 ? 'end' : dx > 0 ? 'start' : 'all');
 };
 
@@ -236,7 +248,7 @@ export function QuestionTable({
               <th>削除</th>
             </tr>
           </thead>
-          <tbody onKeyDown={onNavKey}>
+          <tbody onKeyDownCapture={onNavKey}>
             {questions.length === 0 && (
               <tr>
                 <td colSpan={8}>
