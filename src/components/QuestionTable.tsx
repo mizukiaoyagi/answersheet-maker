@@ -51,6 +51,8 @@ const onNavKey = (e: React.KeyboardEvent<HTMLElement>) => {
   switch (e.key) {
     case 'Enter':
       if (e.shiftKey || isSelect) return; // Shift+Enter は改行、選択欄の Enter は選択肢を開く
+      // 模範解答は改行できるよう、1回目の Enter は改行にして、末尾の空行での Enter で下へ動く
+      if (multiline && !(atEnd && el.value.endsWith('\n'))) return;
       dy = 1;
       break;
     case 'ArrowDown':
@@ -93,6 +95,12 @@ const onNavKey = (e: React.KeyboardEvent<HTMLElement>) => {
   // 数値の欄が自分で受け取る上下キー（値の増減）より先に処理するため、ここで止める
   e.preventDefault();
   e.stopPropagation();
+  if (e.key === 'Enter' && multiline) {
+    // 動く合図に使った末尾の改行は消す（React の入力として反映させるため、input イベントで書き換える）
+    const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+    set?.call(el, el.value.slice(0, -1));
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  }
   focusField(target, dx < 0 ? 'end' : dx > 0 ? 'start' : 'all');
 };
 
