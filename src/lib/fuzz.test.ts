@@ -22,7 +22,7 @@ function randomCase(seed: number): { meta: TestMeta; questions: Question[] } {
   const meta: TestMeta = {
     ...DEFAULT_META,
     title: pick(['', '理科 小テスト', 'あ'.repeat(40)]),
-    paper: pick(['A4', 'B4'] as const),
+    paper: pick(['A4', 'B4', 'B5'] as const),
     orientation: pick(['portrait', 'landscape'] as const),
     writing: pick(['horizontal', 'vertical'] as const),
     hasClass: rand() < 0.7,

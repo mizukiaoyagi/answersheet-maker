@@ -3,6 +3,8 @@ import type { AnswerType, Question, TestMeta } from './types';
 
 /** 1pt の長さ mm */
 const PT_MM = 25.4 / 72;
+/** 下の隙間を見出しの行に振り分けるときの、これより小さい隙間は無視する量と、はみ出さないための残し（行単位） */
+const STRETCH_MIN_UNITS = 1e-3;
 
 export type Mode = 'sheet' | 'model';
 export type CellKind = 'title' | 'text' | 'frame' | 'group' | 'label' | 'box' | 'grid';
@@ -105,8 +107,8 @@ export function maxCellsPerRow(maxMain: number): number {
 
 /**
  * ページの内容の幅（列数）。マス目を切りの良い数だけ並べた欄の幅に合わせる。
- * 見出し（タイトル・得点・組番号氏名）も欄の右端・下端にそろえるため、用紙いっぱいには広げない。
- * 用紙との差は、左右（縦書きは上下）に均等に空ける。
+ * 解答欄は左寄せ（縦書きは上寄せ）に置くので、用紙との差は右（縦書きは下）に空く。
+ * 見出し（タイトル・組番号氏名・得点）だけは、用紙の右端（縦書きは下端）にそろえる。
  */
 export function contentCols(physCols: number): number {
   const lead = COEF.LABEL_COLS;
@@ -259,7 +261,7 @@ interface Line {
 }
 
 /** 大問内の欄を左から詰めて、入らなければ折り返す */
-function packGroup(g: Question[], cols: number, lead: number): Line[] {
+function packGroup(g: Question[], cols: number, lead: number, lineCols: number): Line[] {
   const lines: Line[] = [];
   let items: Item[] = [];
   let x = 0;
@@ -302,10 +304,13 @@ function packGroup(g: Question[], cols: number, lead: number): Line[] {
       ...(n > 0 ? { grid: { n, fixed } } : {}),
     };
     const total = item.lead + item.mainW;
-    if (items.length && x + COEF.GAP_COLS + total > cols) flush();
+    // 欄の幅いっぱいの欄（長い記述など）は、単独の行にする
+    const solo = total >= cols;
+    if (items.length && (solo || x + COEF.GAP_COLS + total > lineCols)) flush();
     const at = items.length ? x + COEF.GAP_COLS : 0;
     items.push({ ...item, x: at });
     x = at + total;
+    if (solo) flush();
   }
   flush();
   return lines;
@@ -556,8 +561,6 @@ export function buildLayout(meta: TestMeta, questions: Question[]): Layout {
   const vertical = meta.writing === 'vertical';
   const physCols = paperCols(meta.paper, meta.orientation, meta.writing);
   const cols = contentCols(physCols);
-  // 内容は用紙の中央に置く（左右、縦書きは上下に同じだけ空ける）
-  const offset = Math.floor((physCols - cols) / 2);
   const { w, h } = paperDims(meta.paper, meta.orientation);
   const mg = pageMargins(meta.writing);
   const usableMm = h - mg.y * 2;
@@ -568,7 +571,8 @@ export function buildLayout(meta: TestMeta, questions: Question[]): Layout {
   const pages: PageBuilder[] = [];
   const newPage = () => {
     const pb = new PageBuilder();
-    addHeader(pb, meta, cols, pages.length === 0);
+    // 見出しは用紙の幅いっぱい（右端・縦書きは下端）にそろえる。解答欄は左寄せ・縦書きは上寄せ
+    addHeader(pb, meta, physCols, pages.length === 0);
     pages.push(pb);
     return pb;
   };
@@ -583,16 +587,27 @@ export function buildLayout(meta: TestMeta, questions: Question[]): Layout {
   }
 
   for (const g of groups) {
+    // 大問番号が空の設問は、見出し（「大問1」の行）を付けず、同じ高さの空きにする
+    // （得点や前の大問との間を、見出しがあるときと同じだけ空けるため）。ページの先頭には空きは要らない
     const label = groupLabel(g[0].major, vertical);
-    const lines = packGroup(g, cols, COEF.LABEL_COLS);
+    const leadRows = (page: PageBuilder) => (label || page === pages[0] || page.bodyUnits > 0 ? COEF.GROUP_ROWS : 0);
+    const addLead = (page: PageBuilder) => {
+      if (label) addGroupHeader(page, cols, label);
+      else if (leadRows(page)) {
+        page.addRow(COEF.GROUP_ROWS);
+        page.bodyUnits += COEF.GROUP_ROWS;
+      }
+    };
+    // 1つの欄の幅は、マスをそろえるため cols まで。並べる欄の数は、用紙の使える長さ（physCols）まで使う
+    const lines = packGroup(g, cols, COEF.LABEL_COLS, physCols);
     // 大問の見出しだけが前のページに取り残されないよう、見出し＋最初の行が入るか確認する
-    if (cur.bodyUnits > 0 && cur.units + COEF.GROUP_ROWS + lines[0].h > usableUnits) cur = newPage();
-    addGroupHeader(cur, cols, label);
+    if (cur.bodyUnits > 0 && cur.units + leadRows(cur) + lines[0].h > usableUnits) cur = newPage();
+    addLead(cur);
     let prevEnd: number | null = null;
     lines.forEach((line, i) => {
       if (i > 0 && cur.units + line.h > usableUnits) {
         cur = newPage();
-        addGroupHeader(cur, cols, label);
+        addLead(cur);
         prevEnd = null;
       }
       addLine(cur, line, prevEnd, vertical);
@@ -601,7 +616,16 @@ export function buildLayout(meta: TestMeta, questions: Question[]): Layout {
   }
 
   const fits = pages.every((pb) => pb.units <= usableUnits);
-  for (const pb of pages) for (const c of pb.cells) c.c += offset;
+  // 行は1行（10mm）単位で積むので、下の余白の手前に、1行に満たない隙間が残る。
+  // その隙間は大問の見出しの行に振り分けて、解答欄が下の余白（10mm）まで届くようにする
+  // （マスの大きさは変えない。次の行が入らないほど空いているページは、そのまま）
+  for (const pb of pages) {
+    const gap = usableUnits - pb.units;
+    const heads = pb.cells.filter((c) => c.kind === 'group').map((c) => c.r);
+    if (gap > STRETCH_MIN_UNITS && gap < 1 && heads.length) {
+      for (const r of heads) pb.rowHeights[r] += (gap - STRETCH_MIN_UNITS) / heads.length;
+    }
+  }
   const out = pages.map((pb) =>
     vertical
       ? toVertical(pb, physCols, usableUnits, COEF.COL_MM, COEF.ROW_MM)

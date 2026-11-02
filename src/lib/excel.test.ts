@@ -15,9 +15,7 @@ describe('buildWorkbook', () => {
 
     const layout = buildLayout(s.meta, s.questions);
     const [sheet, model] = back.worksheets;
-    // 内容は用紙の中央に置くので、右の余白の列には何も入らない（読み戻すと列として数えられない）
-    expect(sheet.columnCount).toBeLessThanOrEqual(layout.cols);
-    expect(sheet.columnCount).toBeGreaterThan(layout.cols - 8);
+    expect(sheet.columnCount).toBe(layout.cols);
     expect(sheet.pageSetup.paperSize).toBe(9);
     expect(sheet.pageSetup.scale).toBe(100);
     expect(sheet.pageSetup.orientation).toBe('portrait');
@@ -37,11 +35,11 @@ describe('buildWorkbook', () => {
       ws.eachRow((row) => row.eachCell((c) => out.push(JSON.stringify(c.value))));
       return out.join('\n');
     };
-    expect(textOf(model)).toContain('焦点');
+    expect(textOf(model)).toContain('y=3x-2');
     // 配点はどちらのシートにも書かない（AI採点で読み取れなくなるため）
     expect(textOf(model)).not.toMatch(/\d点/);
     expect(textOf(sheet)).not.toMatch(/\d点/);
     expect(textOf(model)).toContain('FFFF0000');
-    expect(textOf(sheet)).not.toContain('焦点');
+    expect(textOf(sheet)).not.toContain('y=3x-2');
   });
 });

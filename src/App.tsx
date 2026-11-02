@@ -6,6 +6,7 @@ import { Preview } from './components/Preview';
 import { QuestionTable } from './components/QuestionTable';
 import { TopBar } from './components/TopBar';
 import { useAppState } from './hooks/useAppState';
+import { paperDims } from './lib/constants';
 import type { Mode } from './lib/layout';
 import { loadPaneLayout, RATIO_MAX, RATIO_MIN, savePaneLayout } from './lib/storage';
 
@@ -26,6 +27,8 @@ export function App() {
   const { state, setMeta, updateQuestion, setAnswer, removeQuestion, move, addQuestion, loadSample, clearAll } =
     useAppState();
   const { meta, questions } = state;
+  // 印刷の用紙は、寸法で指定する（B4・B5 を名前で指定すると、ISO 規格の大きさになり、JIS とずれるため）
+  const paper = paperDims(meta.paper, meta.orientation);
 
   const split = useMediaQuery(`(min-width: ${SPLIT_MIN_WIDTH}px)`, false, { getInitialValueInEffect: false });
   const [saved] = useState(loadPaneLayout);
@@ -78,7 +81,7 @@ export function App() {
   return (
     <div className="app">
       {/* 印刷時の用紙サイズと向き */}
-      <style>{`@page { size: ${meta.paper} ${meta.orientation}; margin: 0; }`}</style>
+      <style>{`@page { size: ${paper.w}mm ${paper.h}mm; margin: 0; }`}</style>
 
       <TopBar meta={meta} questions={questions} previewOpen={open} onTogglePreview={() => setOpen(!open)} />
 

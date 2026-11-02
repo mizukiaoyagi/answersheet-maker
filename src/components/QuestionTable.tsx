@@ -1,9 +1,88 @@
 import { Alert, Button, Group, Menu, Text } from '@mantine/core';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { totalPoints } from '../lib/layout';
-import type { SampleKind } from '../lib/sample';
+import { SAMPLE_LIST, type SampleKind } from '../lib/sample';
 import type { Question } from '../lib/types';
 import { QuestionRow } from './QuestionRow';
+
+/** 矢印キーで行き来する欄（QuestionRow の data-nav と同じ名前）。左右はこの順に動く */
+const NAV_COLS = ['major', 'sub', 'type', 'answer', 'w', 'rows', 'points'];
+
+type Field = HTMLInputElement | HTMLTextAreaElement;
+
+const findField = (row: Element, col: string) => {
+  const el = row.querySelector<Field>(`[data-nav="${col}"]`);
+  return el && !el.disabled ? el : null;
+};
+
+/** 移動先の欄にカーソルを置く。all は全選択（そのまま打ち直せる）、start/end は端 */
+const focusField = (el: Field, caret: 'all' | 'start' | 'end') => {
+  el.focus();
+  try {
+    if (caret === 'all') el.select();
+    else el.setSelectionRange(caret === 'start' ? 0 : el.value.length, caret === 'start' ? 0 : el.value.length);
+  } catch {
+    // 選択できない欄は、フォーカスだけ移す
+  }
+};
+
+/**
+ * 入力欄のキー操作: Enter で1つ下の欄へ、矢印キーでその向きの隣の欄へ。
+ * 文字の編集を邪魔しないよう、左右はカーソルが端にあるときだけ、複数行の欄の上下は先頭/末尾にあるときだけ動く。
+ */
+const onNavKey = (e: React.KeyboardEvent<HTMLElement>) => {
+  const el = e.target as Field;
+  const col = el.dataset?.nav;
+  if (!col || e.nativeEvent.isComposing || e.ctrlKey || e.altKey || e.metaKey) return;
+
+  const isSelect = col === 'type';
+  // 選択肢を開いているあいだは、矢印キーは選択肢の操作に使う
+  if (isSelect && el.getAttribute('aria-expanded') === 'true') return;
+  const collapsed = el.selectionStart === el.selectionEnd;
+  const atStart = collapsed && el.selectionStart === 0;
+  const atEnd = collapsed && el.selectionEnd === el.value.length;
+  const multiline = el instanceof HTMLTextAreaElement;
+
+  let dx = 0;
+  let dy = 0;
+  switch (e.key) {
+    case 'Enter':
+      if (e.shiftKey || isSelect) return; // Shift+Enter は改行、選択欄の Enter は選択肢を開く
+      dy = 1;
+      break;
+    case 'ArrowDown':
+      if (e.shiftKey || isSelect || (multiline && !atEnd)) return;
+      dy = 1;
+      break;
+    case 'ArrowUp':
+      if (e.shiftKey || isSelect || (multiline && !atStart)) return;
+      dy = -1;
+      break;
+    case 'ArrowLeft':
+      if (e.shiftKey || !(isSelect || atStart)) return;
+      dx = -1;
+      break;
+    case 'ArrowRight':
+      if (e.shiftKey || !(isSelect || atEnd)) return;
+      dx = 1;
+      break;
+    default:
+      return;
+  }
+
+  let target: Field | null = null;
+  if (dy) {
+    const sibling = dy > 0 ? 'nextElementSibling' : 'previousElementSibling';
+    for (let row = el.closest('tr')?.[sibling]; row && !target; row = row[sibling]) target = findField(row, col);
+  } else {
+    const row = el.closest('tr');
+    for (let i = NAV_COLS.indexOf(col) + dx; row && !target && i >= 0 && i < NAV_COLS.length; i += dx)
+      target = findField(row, NAV_COLS[i]);
+  }
+  if (!target) return;
+  e.preventDefault();
+  focusField(target, dx < 0 ? 'end' : dx > 0 ? 'start' : 'all');
+};
 
 interface Props {
   questions: Question[];
@@ -120,9 +199,11 @@ export function QuestionTable({
               </Button>
             </Menu.Target>
             <Menu.Dropdown>
-              <Menu.Item onClick={() => loadSample('one')}>1枚のサンプル（理科）</Menu.Item>
-              <Menu.Item onClick={() => loadSample('two')}>2枚のサンプル（社会）</Menu.Item>
-              <Menu.Item onClick={() => loadSample('vertical')}>縦書きのサンプル（国語・B4横）</Menu.Item>
+              {SAMPLE_LIST.map((s) => (
+                <Menu.Item key={s.kind} onClick={() => loadSample(s.kind)}>
+                  {s.label}
+                </Menu.Item>
+              ))}
             </Menu.Dropdown>
           </Menu>
           <Button size="xs" variant="outline" color="red" onClick={clear}>
@@ -155,7 +236,7 @@ export function QuestionTable({
               <th>削除</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody onKeyDown={onNavKey}>
             {questions.length === 0 && (
               <tr>
                 <td colSpan={8}>

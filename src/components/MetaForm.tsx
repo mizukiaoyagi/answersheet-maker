@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { Checkbox, Group, SegmentedControl, Text, TextInput } from '@mantine/core';
 import { HoldNumberInput } from './HoldNumberInput';
-import type { Orientation, PaperSize, Writing } from '../lib/constants';
+import { PAPER_SIZES, type Orientation, type PaperSize, type Writing } from '../lib/constants';
 import type { TestMeta } from '../lib/types';
 
 /** チェックボックスは、塗りつぶさず、枠とチェックだけの控えめな見た目にする */
@@ -54,7 +54,7 @@ export const MetaForm = memo(function MetaForm({
       </Group>
       <Group align="center" gap="lg">
         <Field label="用紙サイズ">
-          <SegmentedControl value={meta.paper} onChange={(v) => onChange({ paper: v as PaperSize })} data={['A4', 'B4']} />
+          <SegmentedControl value={meta.paper} onChange={(v) => onChange({ paper: v as PaperSize })} data={[...PAPER_SIZES]} />
         </Field>
         <Field label="向き">
           <SegmentedControl

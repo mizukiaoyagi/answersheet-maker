@@ -71,21 +71,25 @@ export const COLOR = {
   RED: 'FF0000',
 } as const;
 
-export type PaperSize = 'A4' | 'B4';
+/** 学校のテストでよく使う用紙。B4・B5 は JIS 規格（ISO ではない） */
+export type PaperSize = 'A4' | 'B4' | 'B5';
+/** 選択肢の並び順（よく使う順） */
+export const PAPER_SIZES: readonly PaperSize[] = ['A4', 'B4', 'B5'];
 export type Orientation = 'portrait' | 'landscape';
 export type Writing = 'horizontal' | 'vertical';
 
 export const PAPERS: Record<PaperSize, { w: number; h: number; excelPaperSize: number }> = {
   A4: { w: 210, h: 297, excelPaperSize: 9 },
   B4: { w: 257, h: 364, excelPaperSize: 12 },
+  B5: { w: 182, h: 257, excelPaperSize: 13 },
 };
 
 /**
- * 用紙の余白 mm。x は左右、y は上下。
- * 横書きは左右を広め（穴あけ・見た目）、縦書きは上下を広めにする。
+ * 用紙の余白 mm。x は左右、y は上下。どちらの書き方も 10mm。
+ * 解答欄は左寄せ（縦書きは上寄せ）に置き、内容より余った長さは、右（縦書きは下）に回る。
  */
-export function pageMargins(writing: Writing): { x: number; y: number } {
-  return writing === 'vertical' ? { x: 10, y: 15 } : { x: 15, y: 10 };
+export function pageMargins(_writing: Writing): { x: number; y: number } {
+  return { x: 10, y: 10 };
 }
 
 /** 向きを反映した用紙寸法 mm */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { COEF } from './constants';
+import { COEF, PAPER_SIZES, PAPERS } from './constants';
 import {
   boxSize,
   buildLayout,
@@ -78,10 +78,35 @@ describe('boxSize', () => {
 
 describe('paperCols', () => {
   it('用紙幅に応じた列数', () => {
-    expect(paperCols('A4', 'portrait')).toBe(36);
-    expect(paperCols('B4', 'portrait')).toBe(45);
-    expect(paperCols('A4', 'landscape')).toBe(53);
-    expect(paperCols('A4', 'portrait', 'vertical')).toBe(53);
+    expect(paperCols('A4', 'portrait')).toBe(38);
+    expect(paperCols('B4', 'portrait')).toBe(47);
+    expect(paperCols('A4', 'landscape')).toBe(55);
+    expect(paperCols('A4', 'portrait', 'vertical')).toBe(55);
+  });
+});
+
+describe('用紙サイズ', () => {
+  it('学校のテストで使う3種類。寸法と Excel の用紙コードが正しい', () => {
+    expect(PAPER_SIZES).toEqual(['A4', 'B4', 'B5']);
+    expect(Object.fromEntries(PAPER_SIZES.map((p) => [p, [PAPERS[p].w, PAPERS[p].h, PAPERS[p].excelPaperSize]]))).toEqual({
+      A4: [210, 297, 9],
+      B4: [257, 364, 12],
+      B5: [182, 257, 13],
+    });
+  });
+
+  it('どの用紙・向き・書き方でも、サンプルが重ならず用紙の幅に収まる', () => {
+    const s = sampleState();
+    for (const paper of PAPER_SIZES)
+      for (const orientation of ['portrait', 'landscape'] as const)
+        for (const writing of ['horizontal', 'vertical'] as const) {
+          const l = buildLayout({ ...s.meta, paper, orientation, writing }, s.questions);
+          for (const p of l.pages)
+            for (const c of p.cells) {
+              expect(c.c + c.cs, `${paper} ${orientation} ${writing}`).toBeLessThanOrEqual(p.colWidths.length);
+              expect(c.r + c.rs).toBeLessThanOrEqual(p.rowHeights.length);
+            }
+        }
   });
 });
 
@@ -89,11 +114,11 @@ describe('buildLayout', () => {
   const overlaps = (a: { r: number; c: number; rs: number; cs: number }, b: typeof a) =>
     a.r < b.r + b.rs && b.r < a.r + a.rs && a.c < b.c + b.cs && b.c < a.c + a.cs;
 
-  it('サンプルがA4・1枚に収まり、セルが重ならず幅を超えない', () => {
+  it('サンプル（数学）がA4・2枚に収まり、セルが重ならず幅を超えない', () => {
     const s = sampleState();
     const l = buildLayout(s.meta, s.questions);
     expect(l.fits).toBe(true);
-    expect(l.pages).toHaveLength(1);
+    expect(l.pages).toHaveLength(2);
     for (const page of l.pages) {
       const cells = page.cells;
       for (const c of cells) {
@@ -157,11 +182,54 @@ describe('buildLayout', () => {
     expect(total).toBe(12);
   });
 
+  it('1行に満たない隙間は大問の見出しに振り分け、解答欄が下の余白まで届く', () => {
+    // 8行ぶんの設問が1ページに詰まり、1行に満たない隙間が残る長さにする
+    for (const [paper, orientation] of [['A4', 'portrait'], ['B4', 'portrait'], ['A4', 'landscape']] as const) {
+      const meta = { ...DEFAULT_META, paper, orientation };
+      const many = Array.from({ length: 30 }, (_, i) => q(String(Math.floor(i / 3) + 1), String((i % 3) + 1), 'ア'));
+      const l = buildLayout(meta, many);
+      for (const p of l.pages.slice(0, -1)) {
+        // 隙間が1行未満のページは、下の余白の手前（0.01mm 以内）まで埋まる
+        const rest = l.usableMm - p.heightMm;
+        if (rest < 10) expect(rest, `${paper} ${orientation}`).toBeLessThan(0.01);
+        expect(p.heightMm).toBeLessThanOrEqual(l.usableMm);
+      }
+    }
+  });
+
   it('1枚だけのときはタイトルも組番号氏名も付く', () => {
     const l = buildLayout(DEFAULT_META, [q('1', '1', 'ア')]);
     expect(l.pages).toHaveLength(1);
     expect(l.pages[0].cells.some((c) => c.kind === 'title')).toBe(true);
     expect(l.pages[0].cells.some((c) => c.text === '氏名')).toBe(true);
+  });
+
+  it('大問番号が空の設問には見出しを付けないが、得点との間は見出しがあるときと同じだけ空ける', () => {
+    const qs = [q('', '1', 'ア'), q('', '2', 'イ')];
+    const withHead = buildLayout(DEFAULT_META, [q('1', '1', 'ア'), q('1', '2', 'イ')]).pages[0];
+    const noHead = buildLayout(DEFAULT_META, qs).pages[0];
+    expect(noHead.cells.filter((c) => c.kind === 'group')).toHaveLength(0);
+    expect(noHead.cells.filter((c) => c.kind === 'label').map((c) => c.label)).toEqual(['(1)', '(2)']);
+    expect(noHead.rowHeights).toEqual(withHead.rowHeights);
+    // 得点の枠の下端から、最初の解答欄の上端までの距離
+    const gapMm = (p: typeof noHead) => {
+      const ys = p.rowHeights.reduce<number[]>((a, h) => [...a, a[a.length - 1] + h], [0]);
+      const score = p.cells.find((c) => c.text === '得点')!;
+      const first = Math.min(...p.cells.filter((c) => c.kind === 'label').map((c) => c.r));
+      return ys[first] - ys[score.r + score.rs];
+    };
+    expect(gapMm(noHead)).toBe(gapMm(withHead));
+    expect(gapMm(noHead)).toBeGreaterThanOrEqual(COEF.GROUP_ROWS * COEF.ROW_MM);
+  });
+
+  it('大問番号が空の設問が2枚目の先頭に来るときは、空きを付けない', () => {
+    const many = Array.from({ length: 40 }, (_, i) => q('', String(i + 1), 'あ'.repeat(40)));
+    const l = buildLayout(DEFAULT_META, many);
+    expect(l.pages.length).toBeGreaterThan(1);
+    // 1枚目の先頭は見出しぶんの空きがあり、2枚目以降は先頭の行から始まる（空き＋余白の行だけ）
+    expect(l.pages[0].rowHeights[0]).toBeGreaterThan(0);
+    const first = l.pages[1].cells.filter((c) => c.kind === 'label').reduce((m, c) => Math.min(m, c.r), Infinity);
+    expect(first).toBe(1); // 先頭の余白の行（0.4行）の次
   });
 
   it('同じ大問が次のページへ続くときも、見出しは大問の名前のまま', () => {
@@ -196,6 +264,28 @@ describe('見出しと得点欄', () => {
     // 氏名の枠（氏名ラベルの右隣）と得点の欄の右端がそろう
     expect(rightEdge(cells, (c) => c.r === name.r)).toBe(rightEdge(cells, (c) => c.r === score.r));
     expect(rightEdge(cells, (c) => c.r === name.r)).toBe(title.c + title.cs);
+  });
+
+  it('解答欄は左寄せ（縦書きは上寄せ）、名前と得点は用紙の右端（縦書きは下端）にそろう', () => {
+    for (const writing of ['horizontal', 'vertical'] as const) {
+      const meta = { ...DEFAULT_META, writing };
+      const l = buildLayout(meta, [q('1', '1', 'ア')]);
+      const cells = l.pages[0].cells;
+      // 物理的な位置: 横書きは列、縦書きは行が「文字の進む方向」
+      const start = (c: (typeof cells)[number]) => (writing === 'vertical' ? c.r : c.c);
+      const end = (c: (typeof cells)[number]) => (writing === 'vertical' ? c.r + c.rs : c.c + c.cs);
+      const along = writing === 'vertical' ? l.pages[0].rowHeights.length : l.cols;
+      // 解答欄（小問番号）の先頭は端（0）から始まる
+      expect(Math.min(...cells.filter((c) => c.kind === 'label').map(start))).toBe(0);
+      // 名前の枠と得点の枠は、用紙の右端（縦書きは下端）まで届く
+      for (const text of ['氏名', '得点']) {
+        const label = cells.find((c) => c.text === text)!;
+        const rowCells = cells.filter((c) =>
+          writing === 'vertical' ? c.c === label.c : c.r === label.r,
+        );
+        expect(Math.max(...rowCells.map(end)), `${writing} ${text}`).toBe(along);
+      }
+    }
   });
 
   it('解答欄に配点は書かない（解答用紙も模範解答も）', () => {
