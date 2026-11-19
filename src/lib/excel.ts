@@ -1,5 +1,6 @@
 import ExcelJS from 'exceljs';
 import { FONT, pageMargins, PAPERS } from './constants';
+import { safeFileName, saveBlob } from './download';
 import { buildLayout, cellRuns, type LCell, type Layout, type Mode } from './layout';
 import type { Question, TestMeta } from './types';
 
@@ -121,13 +122,5 @@ export async function downloadXlsx(meta: TestMeta, questions: Question[]): Promi
   const blob = new Blob([buf as ArrayBuffer], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   });
-  const name = (meta.title.trim() || '解答用紙').replace(/[\\/:*?"<>|]/g, '_');
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${name}.xlsx`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 10000);
+  saveBlob(blob, `${safeFileName(meta.title, '解答用紙')}.xlsx`);
 }

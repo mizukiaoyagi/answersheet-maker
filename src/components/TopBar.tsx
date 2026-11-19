@@ -1,9 +1,11 @@
-import { Button, Group } from '@mantine/core';
+import { Button, Group, Menu } from '@mantine/core';
 import { useEffect, useState } from 'react';
 import { downloadXlsx } from '../lib/excel';
+import type { Mode } from '../lib/layout';
+import { downloadPdf } from '../lib/pdfExport';
 import type { Question, TestMeta } from '../lib/types';
 
-/** 上部バー: ツール名、Excel 保存、印刷 */
+/** 上部バー: ツール名、Excel 保存、PDF 保存、印刷 */
 export function TopBar({
   meta,
   questions,
@@ -36,6 +38,20 @@ export function TopBar({
     }
   };
 
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const savePdf = async (mode: Mode) => {
+    setPdfBusy(true);
+    try {
+      await downloadPdf(meta, questions, mode);
+    } catch (e) {
+      window.alert(
+        `PDFの作成に失敗しました: ${e instanceof Error ? e.message : String(e)}\n「印刷」から、送信先を「PDFに保存」にして保存してください。`,
+      );
+    } finally {
+      setPdfBusy(false);
+    }
+  };
+
   return (
     <header className={`topbar no-print${scrolled ? ' scrolled' : ''}`}>
       <h1>解答用紙メーカー</h1>
@@ -46,8 +62,19 @@ export function TopBar({
         <Button onClick={saveExcel} loading={exporting}>
           Excelで保存
         </Button>
+        <Menu position="bottom-end" withinPortal>
+          <Menu.Target>
+            <Button variant="outline" loading={pdfBusy}>
+              PDFで保存
+            </Button>
+          </Menu.Target>
+          <Menu.Dropdown>
+            <Menu.Item onClick={() => savePdf('sheet')}>解答用紙</Menu.Item>
+            <Menu.Item onClick={() => savePdf('model')}>模範解答</Menu.Item>
+          </Menu.Dropdown>
+        </Menu>
         <Button variant="outline" onClick={() => window.print()}>
-          印刷・PDF
+          印刷
         </Button>
       </Group>
     </header>
