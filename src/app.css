@@ -4,14 +4,14 @@ body {
 }
 
 :root {
-  /* 配色（主役は深緑。ほかは無彩色に近いグレー） */
-  --c-primary: #1f5f46;
-  --c-primary-soft: #eef5f1;
-  --c-primary-soft-strong: #dbe9e1;
+  /* 配色 */
+  --c-primary: #2563A8;
+  --c-primary-soft: #EEF3F8;
+  --c-primary-soft-strong: #DCE6F1;
   --c-bg: #f4f5f5;
-  --c-border: #d9dddb;
-  --c-table-head: #eceeed;
-  --c-table-head-text: #3d4743;
+  --c-border: #C2D3E7;
+  --c-table-head: #EEF3F8;
+  --c-table-head-text: #1D4D83;
   --c-muted: #6b7571;
 
   /* 上部バーの高さ（上下の余白20px × 2 + ボタンの高さ36px + 下の線1px） */

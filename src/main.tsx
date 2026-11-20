@@ -6,24 +6,24 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { FONT } from './lib/constants';
 
-// 主役の色は、くすんだ深緑（shade 8 = #1f5f46）。色の数を絞って、落ち着いた公式な印象にする
-const forest: MantineColorsTuple = [
-  '#eef5f1',
-  '#dbe9e1',
-  '#bcd5c7',
-  '#97bda8',
-  '#73a48a',
-  '#4f8b6d',
-  '#357455',
-  '#296a4e',
-  '#1f5f46',
-  '#174a37',
+// 主役の色は、落ち着いた青（shade 8 = #2563A8）。色の数を絞って、落ち着いた公式な印象にする
+const brand: MantineColorsTuple = [
+  '#EEF3F8',
+  '#DCE6F1',
+  '#C2D3E7',
+  '#A3BDDA',
+  '#85A8CE',
+  '#6692C2',
+  '#4C7FB8',
+  '#366FAF',
+  '#2563A8',
+  '#1D4D83',
 ];
 
 const theme = createTheme({
   fontFamily: FONT.CSS_FAMILY,
-  colors: { forest },
-  primaryColor: 'forest',
+  colors: { brand },
+  primaryColor: 'brand',
   primaryShade: { light: 8, dark: 8 },
 });
 
